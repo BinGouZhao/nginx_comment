@@ -4,5 +4,5 @@
 
 + 1.mmap 不映射文件
 + 2.mmap 映射 /dev/zero
-+ 3.shmem
++ 3.shmget
 

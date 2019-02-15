@@ -21,7 +21,7 @@ void main() {
 	return;
     }
 
-    /** 运行时报错, errno = 14, 权限错误, 转root运行通过 **/
+    /** 运行时报错, errno = 13, 权限错误, 转root运行通过 **/
     if ((shmptr = shmat(shmid, NULL, 0)) == (void *)-1) {
 	printf("run func shmat fail.\n");
 	return;
