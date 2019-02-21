@@ -24,3 +24,7 @@ ngx_queue 双向链表实现
 
 ngx_pool 实现
 
+#### 2019年2月22日
+
+ngx_errno 实现, errno 错误信息
+
