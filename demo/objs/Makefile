@@ -36,6 +36,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_log.o \
 	objs/src/core/ngx_palloc.o \
 	objs/src/core/ngx_rbtree.o \
+	objs/src/core/ngx_array.o \
 	objs/src/core/ngx_times.o \
 	objs/src/core/ngx_cycle.o \
 	objs/src/core/ngx_string.o \
@@ -53,6 +54,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/nginx.o \
 	objs/src/core/ngx_log.o \
 	objs/src/core/ngx_palloc.o \
+	objs/src/core/ngx_array.o \
 	objs/src/core/ngx_string.o \
 	objs/src/core/ngx_times.o \
 	objs/src/core/ngx_cycle.o \
@@ -168,5 +170,10 @@ objs/src/os/unix/ngx_socket.o:	$(CORE_DEPS) \
 		-o objs/src/os/unix/ngx_socket.o \
 		src/os/unix/ngx_socket.c
 
+objs/src/core/ngx_array.o:	$(CORE_DEPS) \
+	src/core/ngx_array.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/core/ngx_array.o \
+		src/core/ngx_array.c
 
 

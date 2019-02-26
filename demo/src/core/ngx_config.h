@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <sys/resource.h>
 #include <sys/ioctl.h>
+#include <arpa/inet.h>
 
 extern char **environ;
 

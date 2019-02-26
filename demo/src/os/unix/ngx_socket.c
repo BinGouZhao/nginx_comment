@@ -20,9 +20,6 @@
  * ioctl() in Linux 2.4 and 2.6 uses BKL, however, fcntl(F_SETFL) uses it too.
  */
 
-
-#if 1
-
 int
 ngx_nonblocking(ngx_socket_t s)
 {
@@ -43,8 +40,6 @@ ngx_blocking(ngx_socket_t s)
 
     return ioctl(s, FIONBIO, &nb);
 }
-
-#endif
 
 int
 ngx_tcp_nopush(ngx_socket_t s)

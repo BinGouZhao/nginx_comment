@@ -71,6 +71,23 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     cycle->log = &cycle->new_log;
     pool->log = &cycle->new_log;
 
+    struct sockaddr_in address;
+    ngx_memzero(&address, sizeof(address));
+    address.sin_family =AF_INET;
+    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+    address.sin_port = htons(40199);
+
+    ngx_listening_t *ls = ngx_create_listening(cycle, (struct sockaddr *)&address, sizeof(address));
+
+    cycle->listening.elts = ls;
+    cycle->listening.nelts = 1;
+
+    if (ngx_open_listening_sockets(cycle) != NGX_OK) {
+        //goto failed;
+        return NULL;
+    }
+
+
     return NULL;
 }
 
