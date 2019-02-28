@@ -63,6 +63,10 @@ u_char *ngx_cpystrn(u_char *dst, u_char *src, size_t n);
 u_char *ngx_slprintf(u_char *buf, u_char *last, const char *fmt, ...);
 u_char *ngx_sprintf(u_char *buf, const char *fmt, ...);
 u_char *ngx_vslprintf(u_char *buf, u_char *last, const char *fmt, va_list args);
+u_char *ngx_snprintf(u_char *buf, size_t max, const char *fmt, ...);
  
+
+#define ngx_value_helper(n)   #n
+#define ngx_value(n)          ngx_value_helper(n)
 
 #endif /* _NGX_STRING_H_INCLUDED_ */

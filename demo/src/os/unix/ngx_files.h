@@ -4,6 +4,8 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
+typedef struct stat     ngx_file_info_t;
+
 #define NGX_FILE_RDONLY          O_RDONLY
 #define NGX_FILE_WRONLY          O_WRONLY
 #define NGX_FILE_RDWR            O_RDWR
@@ -19,6 +21,8 @@
 
 #define ngx_stderr          STDERR_FILENO
 #define ngx_stdout          STDOUT_FILENO
+#define ngx_set_stderr(fd)       dup2(fd, STDERR_FILENO)
+#define ngx_set_stderr_n         "dup2(STDERR_FILENO)"
 
 #define NGX_FILE_DEFAULT_ACCESS  0644
 #define NGX_FILE_OWNER_ACCESS    0600
@@ -28,13 +32,17 @@
 #define ngx_close_file_n         "close()"
 
 
-#define NGX_INVALID_FILE -1
+#define NGX_INVALID_FILE        -1
+#define NGX_FILE_ERROR          -1
 #define NGX_LINEFEED_SIZE        1
 #define NGX_LINEFEED             "\x0a"
 
 #define ngx_path_separator(c)    ((c) == '/')
 
 typedef int     ngx_fd_t;
+
+ssize_t ngx_write_file(ngx_file_t *file, u_char *buf, size_t size,
+    off_t offset);
 
 static ngx_inline ssize_t
 ngx_write_fd(ngx_fd_t fd, void *buf, size_t n)

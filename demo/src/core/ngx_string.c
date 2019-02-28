@@ -386,6 +386,19 @@ ngx_slprintf(u_char *buf, u_char *last, const char *fmt, ...)
     return p;
 }
 
+u_char *
+ngx_snprintf(u_char *buf, size_t max, const char *fmt, ...)
+{
+    u_char   *p;
+    va_list   args;
+
+    va_start(args, fmt);
+    p = ngx_vslprintf(buf, buf + max, fmt, args);
+    va_end(args);
+
+    return p;
+}
+
 static u_char *
 ngx_sprintf_num(u_char *buf, u_char *last, uint64_t ui64, u_char zero,
     ngx_uint_t hexadecimal, ngx_uint_t width)

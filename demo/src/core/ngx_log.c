@@ -1,14 +1,6 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-#ifndef NGX_ERROR_LOG_PATH
-#define NGX_ERROR_LOG_PATH  "logs/error.log"
-#endif
-
-#ifndef NGX_PREFIX
-#define NGX_PREFIX  "/home/tom/demo/objs/"
-#endif
-
 static void ngx_log_insert(ngx_log_t *log, ngx_log_t *new_log);
 
 extern ngx_pid_t        ngx_pid;
@@ -348,4 +340,27 @@ ngx_log_insert(ngx_log_t *log, ngx_log_t *new_log)
     log->next = new_log;
 }
 
+ngx_int_t
+ngx_log_redirect_stderr(ngx_cycle_t *cycle)
+{
+    ngx_fd_t  fd;
+
+    if (cycle->log_use_stderr) {
+        return NGX_OK;
+    }
+
+    /* file log always exists when we are called */
+    fd = ngx_log_get_file_log(cycle->log)->file->fd;
+
+    if (fd != ngx_stderr) {
+        if (ngx_set_stderr(fd) == NGX_FILE_ERROR) {
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                          ngx_set_stderr_n " failed");
+
+            return NGX_ERROR;
+        }
+    }
+
+    return NGX_OK;
+}
 

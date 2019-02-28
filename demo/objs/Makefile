@@ -12,6 +12,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/core/ngx_log.h \
 	src/core/ngx_palloc.h \
 	src/core/ngx_string.h \
+	src/core/ngx_file.h \
 	src/core/ngx_times.h \
 	src/os/unix/ngx_files.h \
 	src/os/unix/ngx_atomic.h \
@@ -23,6 +24,8 @@ CORE_DEPS = src/core/nginx.h \
 	src/core/ngx_queue.h \
 	src/core/ngx_connection.h \
 	src/os/unix/ngx_socket.h \
+	src/os/unix/ngx_os.h \
+	src/os/unix/ngx_process_cycle.h \
 	src/os/unix/ngx_errno.h
 
 CORE_INCS = -I src/core \
@@ -48,6 +51,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_queue.o \
 	objs/src/core/ngx_connection.o \
 	objs/src/os/unix/ngx_socket.o \
+	objs/src/os/unix/ngx_daemon.o \
+	objs/src/os/unix/ngx_process_cycle.o \
+	objs/src/core/ngx_file.o \
 	objs/src/os/unix/ngx_files.o 
 
 	$(LINK) -o objs/nginx \
@@ -67,6 +73,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_queue.o \
 	objs/src/core/ngx_connection.o \
 	objs/src/os/unix/ngx_socket.o \
+	objs/src/os/unix/ngx_daemon.o \
+	objs/src/os/unix/ngx_process_cycle.o \
+	objs/src/core/ngx_file.o \
 	-ldl -lpthread -lcrypt -lpcre -lz \
 	-Wl,-E
 	
@@ -175,5 +184,23 @@ objs/src/core/ngx_array.o:	$(CORE_DEPS) \
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/core/ngx_array.o \
 		src/core/ngx_array.c
+
+objs/src/os/unix/ngx_daemon.o:	$(CORE_DEPS) \
+	src/os/unix/ngx_daemon.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/os/unix/ngx_daemon.o \
+		src/os/unix/ngx_daemon.c
+
+objs/src/os/unix/ngx_process_cycle.o:	$(CORE_DEPS) \
+	src/os/unix/ngx_process_cycle.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/os/unix/ngx_process_cycle.o \
+		src/os/unix/ngx_process_cycle.c
+
+objs/src/core/ngx_file.o:	$(CORE_DEPS) \
+	src/core/ngx_file.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/core/ngx_file.o \
+		src/core/ngx_file.c
 
 

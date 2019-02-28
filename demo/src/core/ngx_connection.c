@@ -199,3 +199,63 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
     return NGX_OK;
 }
 
+void 
+ngx_configure_listening_sockets(ngx_cycle_t *cycle)
+{
+    int                 value;
+    ngx_uint_t          i;
+    ngx_listening_t     *ls;
+
+    ls = cycle->listening.elts;
+    for (i = 0; i < cycle->listening.nelts; i++) {
+       if (ls[i].rcvbuf != -1) {
+           if (setsockopt(ls[i].fd, SOL_SOCKET, SO_RCVBUF,
+                          (const void *) &ls[i].rcvbuf, sizeof(int))
+               == -1)
+           {
+               ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_socket_errno,
+                        "setsockopt(SO_RCVBUF, %d) %V failed, ignored",
+                              ls[i].rcvbuf, &ls[i].addr_text);
+            }
+        }
+
+        if (ls[i].sndbuf != -1) {
+            if (setsockopt(ls[i].fd, SOL_SOCKET, SO_SNDBUF,
+                           (const void *) &ls[i].sndbuf, sizeof(int))
+                == -1)
+            {
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_socket_errno,
+                              "setsockopt(SO_SNDBUF, %d) %V failed, ignored",
+                              ls[i].sndbuf, &ls[i].addr_text);
+            }
+        }
+
+        if (ls[i].keepalive) {
+            value = (ls[i].keepalive == 1) ? 1 : 0;
+
+            if (setsockopt(ls[i].fd, SOL_SOCKET, SO_KEEPALIVE,
+                           (const void *) &value, sizeof(int))
+                == -1)
+            {
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_socket_errno,
+                              "setsockopt(SO_KEEPALIVE, %d) %V failed, ignored",
+                              value, &ls[i].addr_text);
+            }
+        }
+
+        if (ls[i].listen) {
+
+            /* change backlog via listen() */
+
+            if (listen(ls[i].fd, ls[i].backlog) == -1) {
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_socket_errno,
+                        "listen() to %V, backlog %d failed, ignored",
+                        &ls[i].addr_text, ls[i].backlog);
+            }
+        }
+    }
+
+    return;
+}
+
+

@@ -5,9 +5,10 @@
 
 typedef struct ngx_cycle_s           ngx_cycle_t;
 typedef struct ngx_pool_s            ngx_pool_t;
-typedef struct ngx_log_s        ngx_log_t;
-typedef struct ngx_open_file_s  ngx_open_file_t;
+typedef struct ngx_log_s             ngx_log_t;
+typedef struct ngx_open_file_s       ngx_open_file_t;
 typedef struct ngx_connection_s      ngx_connection_t;
+typedef struct ngx_file_s            ngx_file_t;
 
 //typedef void (*ngx_event_handler_pt)(ngx_event_t *ev);
 typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
@@ -20,6 +21,7 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #define  NGX_DECLINED   -5
 #define  NGX_ABORT      -6
 
+#include <nginx.h>
 #include <ngx_errno.h>
 #include <ngx_atomic.h>
 #include <ngx_rbtree.h>
@@ -31,12 +33,15 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #include <ngx_palloc.h>
 #include <ngx_queue.h>
 #include <ngx_array.h>
+#include <ngx_file.h>
 #include <ngx_process.h>
 #include <ngx_log.h>
 #include <ngx_conf_file.h>
 #include <ngx_cycle.h>
 #include <ngx_times.h>
 #include <ngx_connection.h>
+#include <ngx_process_cycle.h>
+#include <ngx_os.h>
 
 #define ngx_cdecl
 

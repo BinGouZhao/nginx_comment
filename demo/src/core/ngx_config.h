@@ -11,12 +11,28 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <sys/resource.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <arpa/inet.h>
+
+#define ngx_signal_helper(n)     SIG##n
+#define ngx_signal_value(n)      ngx_signal_helper(n)
+
+#define ngx_random               random
+
+/* TODO: #ifndef */
+#define NGX_SHUTDOWN_SIGNAL      QUIT
+#define NGX_TERMINATE_SIGNAL     TERM
+#define NGX_NOACCEPT_SIGNAL      WINCH
+#define NGX_RECONFIGURE_SIGNAL   HUP
+#define NGX_REOPEN_SIGNAL        USR1
+#define NGX_CHANGEBIN_SIGNAL     USR2
 
 extern char **environ;
 

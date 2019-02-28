@@ -7,9 +7,6 @@ static void ngx_show_version_info(void);
 static ngx_int_t ngx_get_options(int argc, char *const *argv);
 static ngx_int_t ngx_save_argv(ngx_cycle_t *cycle, int argc, char *const *argv);
 
-ngx_pid_t               ngx_pid;
-ngx_pid_t               ngx_parent;
-
 static ngx_uint_t       ngx_show_help;
 static ngx_uint_t       ngx_show_version;
 static u_char           *ngx_prefix;
@@ -94,19 +91,53 @@ main(int argc, char *const *argv)
 
     cycle = ngx_init_cycle(&init_cycle);
     if (cycle == NULL) {
-        /*
-        if (ngx_test_config) {
-            ngx_log_stderr(0, "configuration file %s test failed",
-                    init_cycle.conf_file.data);
-        }
-        */
-
+        ngx_log_stderr(0, "cycle init failed.");
         return 1;
     }
 
+    ngx_cycle = cycle;
 
+    if (ngx_init_signals(cycle->log) != NGX_OK) {
+        return 1;
+    }
 
+    if (ngx_daemon(cycle->log) != NGX_OK) {
+        return 1;
+    }
 
+    ngx_daemonized = 1;
+
+    ngx_str_t pid_file = ngx_string(NGX_PREFIX NGX_ERROR_PID_FILE_PATH);
+    if (ngx_create_pidfile(&pid_file, cycle->log) != NGX_OK) {
+        return 1;
+    }
+
+    ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno, "test ngx_log_error()");
+
+    if (ngx_log_redirect_stderr(cycle) != NGX_OK) {
+        return 1;
+    }
+
+    if (log->file->fd != ngx_stderr) {
+        if (ngx_close_file(log->file->fd) == NGX_FILE_ERROR) {
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                          ngx_close_file_n " built-in log failed");
+        }
+    }
+
+    ngx_use_stderr = 0;
+
+    while (1) {
+    }
+    /*
+    if (ngx_process == NGX_PROCESS_SINGLE) {
+        ngx_single_process_cycle(cycle);
+
+    } else {
+        ngx_master_process_cycle(cycle);
+    }
+
+    */
     return 0;
 }
 

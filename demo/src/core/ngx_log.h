@@ -105,6 +105,7 @@ void ngx_log_stderr(ngx_err_t err, const char *fmt, ...);
 u_char *ngx_log_errno(u_char *buf, u_char *last, ngx_err_t err);
 ngx_int_t ngx_log_open_default(ngx_cycle_t *cycle);
 ngx_log_t *ngx_log_get_file_log(ngx_log_t *head);
+ngx_int_t ngx_log_redirect_stderr(ngx_cycle_t *cycle);
 
 ngx_log_t *ngx_log_init(u_char *prefix);
 
@@ -119,5 +120,7 @@ ngx_write_stdout(char *text)
 {
     (void) ngx_write_fd(ngx_stdout, text, strlen(text));
 }
+
+extern ngx_uint_t       ngx_use_stderr;
 
 #endif

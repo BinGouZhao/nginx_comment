@@ -18,10 +18,13 @@ struct ngx_listening_s {
 
     int                 type;
     int                 backlog;
+    int                 rcvbuf;
+    int                 sndbuf;
 
     ngx_log_t           log;
 
-    unsigned            listen;
+    unsigned            listen:1;
+    unsigned            keepalive:2;
 };
 
 struct ngx_connection_s {
@@ -30,6 +33,7 @@ struct ngx_connection_s {
 
 ngx_int_t ngx_open_listening_sockets(ngx_cycle_t *cycle);
 ngx_listening_t *ngx_create_listening(ngx_cycle_t *cycle, struct sockaddr *sockaddr, socklen_t socklen);
+void ngx_configure_listening_sockets(ngx_cycle_t *cycle);
 
 #endif /* _NGX_CONNECTION_H_INCLUDED_ */
  

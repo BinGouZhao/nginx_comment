@@ -86,11 +86,55 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         //goto failed;
         return NULL;
     }
+    ngx_configure_listening_sockets(cycle);
 
+    pool->log = cycle->log;
 
-    return NULL;
+    ngx_destroy_pool(old_cycle->pool);
+    cycle->old_cycle = NULL;
+
+    return cycle;
 }
 
+ngx_int_t
+ngx_create_pidfile(ngx_str_t *name, ngx_log_t *log)
+{
+    size_t      len;
+    ngx_uint_t  create;
+    ngx_file_t  file;
+    u_char      pid[NGX_INT64_LEN + 2];
 
+    if (ngx_process > NGX_PROCESS_MASTER) {
+        return NGX_OK;
+    }
 
+    ngx_memzero(&file, sizeof(ngx_file_t));
+
+    file.name = *name;
+    file.log = log;
+
+    create = NGX_FILE_TRUNCATE;
+
+    file.fd = ngx_open_file(file.name.data, NGX_FILE_RDWR,
+                            create, NGX_FILE_DEFAULT_ACCESS);
+
+    if (file.fd == NGX_INVALID_FILE) {
+        ngx_log_error(NGX_LOG_EMERG, log, ngx_errno,
+                      ngx_open_file_n " \"%s\" failed", file.name.data);
+        return NGX_ERROR;
+    }
+
+    len = ngx_snprintf(pid, NGX_INT64_LEN + 2, "%P%N", ngx_pid) - pid;
+
+    if (ngx_write_file(&file, pid, len, 0) == NGX_ERROR) {
+        return NGX_ERROR;
+    }
+
+    if (ngx_close_file(file.fd) == NGX_FILE_ERROR) {
+        ngx_log_error(NGX_LOG_ALERT, log, ngx_errno,
+                      ngx_close_file_n " \"%s\" failed", file.name.data);
+    }
+
+    return NGX_OK;
+}
 

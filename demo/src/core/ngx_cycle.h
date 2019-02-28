@@ -13,6 +13,9 @@ struct ngx_cycle_s {
 
     ngx_log_t               *log;
     ngx_log_t               new_log;
+
+    ngx_uint_t                log_use_stderr;  /* unsigned  log_use_stderr:1; */
+
     ngx_cycle_t             *old_cycle;
 
     ngx_array_t             listening;
@@ -24,6 +27,7 @@ struct ngx_cycle_s {
 };
 
 ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle);
+ngx_int_t ngx_create_pidfile(ngx_str_t *name, ngx_log_t *log);
 
 extern volatile ngx_cycle_t  *ngx_cycle;
 
