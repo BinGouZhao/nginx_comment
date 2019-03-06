@@ -112,8 +112,7 @@ main(int argc, char *const *argv)
         return 1;
     }
 
-    ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno, "test ngx_log_error()");
-
+    /*
     if (ngx_log_redirect_stderr(cycle) != NGX_OK) {
         return 1;
     }
@@ -124,20 +123,12 @@ main(int argc, char *const *argv)
                           ngx_close_file_n " built-in log failed");
         }
     }
+    */
 
     ngx_use_stderr = 0;
 
-    while (1) {
-    }
-    /*
-    if (ngx_process == NGX_PROCESS_SINGLE) {
-        ngx_single_process_cycle(cycle);
+    ngx_master_process_cycle(cycle);
 
-    } else {
-        ngx_master_process_cycle(cycle);
-    }
-
-    */
     return 0;
 }
 

@@ -13,6 +13,8 @@
 #define NGX_ERROR_PID_FILE_PATH "logs/nginx.pid"
 #endif
 
+#define NGX_PROCESS_NUM     1
+
 #define NGINX_VERSION      "0.0.1"
 
 #endif
