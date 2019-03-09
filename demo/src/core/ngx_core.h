@@ -7,10 +7,11 @@ typedef struct ngx_cycle_s           ngx_cycle_t;
 typedef struct ngx_pool_s            ngx_pool_t;
 typedef struct ngx_log_s             ngx_log_t;
 typedef struct ngx_open_file_s       ngx_open_file_t;
+typedef struct ngx_event_s           ngx_event_t;
 typedef struct ngx_connection_s      ngx_connection_t;
 typedef struct ngx_file_s            ngx_file_t;
 
-//typedef void (*ngx_event_handler_pt)(ngx_event_t *ev);
+typedef void (*ngx_event_handler_pt)(ngx_event_t *ev);
 typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 
 #define  NGX_OK          0
@@ -40,9 +41,9 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #include <ngx_cycle.h>
 #include <ngx_times.h>
 #include <ngx_channel.h>
+#include <ngx_os.h>
 #include <ngx_connection.h>
 #include <ngx_process_cycle.h>
-#include <ngx_os.h>
 
 #define ngx_cdecl
 
@@ -50,5 +51,10 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #define ngx_abs(value)       (((value) >= 0) ? (value) : - (value))
 #define ngx_max(val1, val2)  ((val1 < val2) ? (val2) : (val1))
 #define ngx_min(val1, val2)  ((val1 > val2) ? (val2) : (val1))
+
+typedef union {
+    struct sockaddr           sockaddr;
+    struct sockaddr_in        sockaddr_in;
+} ngx_sockaddr_t;
 
 #endif /* _NGX_CORE_H_INCLUDED_ */

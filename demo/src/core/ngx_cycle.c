@@ -93,6 +93,8 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_destroy_pool(old_cycle->pool);
     cycle->old_cycle = NULL;
 
+    cycle->connection_n = 10;
+
     return cycle;
 }
 

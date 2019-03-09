@@ -1,5 +1,8 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_event.h>
+
+static void ngx_drain_connections(ngx_cycle_t *cycle);
 
 ngx_listening_t *
 ngx_create_listening(ngx_cycle_t *cycle, struct sockaddr *sockaddr,
@@ -208,6 +211,7 @@ ngx_configure_listening_sockets(ngx_cycle_t *cycle)
 
     ls = cycle->listening.elts;
     for (i = 0; i < cycle->listening.nelts; i++) {
+       ls[i].pool_size = 1024;
        if (ls[i].rcvbuf != -1) {
            if (setsockopt(ls[i].fd, SOL_SOCKET, SO_RCVBUF,
                           (const void *) &ls[i].rcvbuf, sizeof(int))
@@ -265,6 +269,7 @@ ngx_get_connection(ngx_socket_t s, ngx_log_t *log)
     ngx_event_t         *rev, *wev;
     ngx_connection_t    *c;
 
+#if 0
     if (ngx_cycle->files && (ngx_uint_t) s >= ngx_cycle->files_n) {
         ngx_log_error(NGX_LOG_ALERT, log, 0,
                 "the new socket has number %d, "
@@ -272,6 +277,7 @@ ngx_get_connection(ngx_socket_t s, ngx_log_t *log)
                 s, ngx_cycle->files_n);
         return NULL;
     }
+#endif
 
     c = ngx_cycle->free_connections;
 
@@ -324,12 +330,6 @@ ngx_get_connection(ngx_socket_t s, ngx_log_t *log)
     return c;
 }
 
-
-
-
-
-}
-
 static void
 ngx_drain_connections(ngx_cycle_t *cycle)
 {
@@ -354,3 +354,16 @@ ngx_drain_connections(ngx_cycle_t *cycle)
         c->read->handler(c->read);
     }
 }
+
+void 
+ngx_free_connection(ngx_connection_t *c)
+{
+    c->data = ngx_cycle->free_connections;
+    ngx_cycle->free_connections = c;
+    ngx_cycle->free_connection_n++;
+
+    if (ngx_cycle->files && ngx_cycle->files[c->fd] == c) {
+        ngx_cycle->files[c->fd] = NULL;
+    }
+}
+

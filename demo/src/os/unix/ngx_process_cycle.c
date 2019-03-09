@@ -1,5 +1,6 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_event.h>
 
 static void ngx_master_process_exit(ngx_cycle_t *cycle);
 static void ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n,

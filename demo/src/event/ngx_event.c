@@ -4,19 +4,31 @@
 
 ngx_uint_t			ngx_event_flags;
 ngx_uint_t			ngx_use_accept_mutex;
+ngx_uint_t          ngx_accept_mutex_held;
+ngx_msec_t          ngx_accept_mutex_delay;
+ngx_int_t           ngx_accept_disabled;
 
-void ngx_process_events_and_timers(ngx_cycle_t *cycle) 
+static ngx_uint_t     ngx_timer_resolution;
+
+void 
+ngx_process_events_and_timers(ngx_cycle_t *cycle) 
 {
 	ngx_uint_t			flags;
 	ngx_msec_t			delta, timer;
 
-	timer = NGX_TIMER_INFINITE;
-	flags = 0;
-	
+    if (ngx_timer_resolution) {
+        timer = NGX_TIMER_INFINITE;
+        flags = 0;
+    } else {
+        timer = ngx_event_find_timer();
+        flags = NGX_UPDATE_TIME;
+    }
+
 	if (ngx_use_accept_mutex) {
 	   if (ngx_accept_disabled > 0) {
 			ngx_accept_disabled--;
 	   } else {
+#if 0
 			if (ngx_trylock_accept_mutex(cycle) = NGX_ERROR) {
 				return;
 			}
@@ -24,21 +36,22 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
 			if (ngx_accept_mutex_held) {
 				flags |= NGX_POST_EVENTS;
 			}
+#endif
 	   }
 	}
 
 	delta = ngx_current_msec;
 
-	(void) ngx_process_events(cycle, timer, flags);
+	(void) ngx_epoll_process_events(cycle, timer, flags);
 
 	delta = ngx_current_msec - delta;
 
 	ngx_event_process_posted(cycle, &ngx_posted_accept_events);
-
+#if 0
 	if (ngx_accept_mutex_held) {
 		ngx_shmtx_unlock(&ngx_accept_mutex);
 	}
-
+#endif
 	if (delta) {
 		ngx_event_expire_timers();
 	}
@@ -46,22 +59,28 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle)
 	ngx_event_process_posted(cycle, &ngx_posted_events);
 }
 
-static ngx_int_t	
+ngx_int_t	
 ngx_event_process_init(ngx_cycle_t *cycle)
 {
-	ngx_uint_t				m, i;
-	ngx_connection_t		*c, *next, *old;
+	ngx_uint_t				i;
+	ngx_connection_t		*c, *next; // *old;
 	ngx_event_t				*rev, *wev;
 	ngx_listening_t			*ls;
+
+    if (NGX_PROCESS_NUM > 2) {
+        ngx_use_accept_mutex = 1;
+        ngx_accept_mutex_held = 0;
+        ngx_accept_mutex_delay = 100;
+    } else {
+        ngx_use_accept_mutex = 0;
+    }
 
 	ngx_queue_init(&ngx_posted_accept_events);
 	ngx_queue_init(&ngx_posted_events);
 
-#if 0
 	if (ngx_event_timer_init(cycle->log) == NGX_ERROR) {
 	   return NGX_ERROR;
 	}
-#endif
 
     if (ngx_epoll_init(cycle) != NGX_OK) {
         exit(2);
@@ -78,7 +97,7 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 	cycle->read_events = ngx_alloc(sizeof(ngx_event_t) * cycle->connection_n,
 									cycle->log);
 	if (cycle->read_events == NULL) {
-		return NULL;
+		return NGX_ERROR;
 	}
 
 	rev = cycle->read_events;
@@ -117,11 +136,13 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 
 	ls = cycle->listening.elts;
 	for (i = 0; i < cycle->listening.nelts; i++) {
+
 		c = ngx_get_connection(ls[i].fd, cycle->log);
 
 		if (c == NULL) {
 			return NGX_ERROR;
 		}
+
 		c->type = ls[i].type;
 		c->log = &ls[i].log;
 

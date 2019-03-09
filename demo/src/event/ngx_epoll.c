@@ -3,12 +3,16 @@
 #include <ngx_event.h>
 
 static int					notify_fd = -1;
-ngx_event_t					notify_event;
-static ngx_connection_t		notify_conn;
+//ngx_event_t					notify_event;
+//static ngx_connection_t		notify_conn;
 
+static int                  ep = -1;
 ngx_uint_t					ngx_use_epoll_rdhup;
-static ngx_uint_t			nevents;
-static struct pollfd		*event_list;
+static ngx_uint_t			nevents = 512;
+static struct epoll_event   *event_list;
+
+#if 0
+static void ngx_epoll_notify_handler(ngx_event_t *ev);
 
 static ngx_int_t
 ngx_epoll_notify_init(ngx_log_t *log)
@@ -46,7 +50,6 @@ ngx_epoll_notify_init(ngx_log_t *log)
 
 	return NGX_OK;
 }
-}
 
 static void 
 ngx_epoll_notify_handler(ngx_event_t *ev)
@@ -73,15 +76,17 @@ ngx_epoll_notify_handler(ngx_event_t *ev)
 	handler(ev);
 }
 
-static void
+#endif
+
+void
 ngx_epoll_test_rdhup(ngx_cycle_t *cycle)
 {
 	int					s[2], events;
 	struct epoll_event	ee;
 
-	if (sockpair(AF_UNIX, SOCK_STREAM, 0, s) == -1) {
+	if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == -1) {
 		ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
-					  "sockpair() failed.");
+					  "socketpair() failed.");
 		return;
 	}
 
@@ -93,7 +98,7 @@ ngx_epoll_test_rdhup(ngx_cycle_t *cycle)
 		goto failed;
 	}
 
-	if (close(s[i]) == -1) {
+	if (close(s[1]) == -1) {
 		ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
 					  "close() failed.");
 		s[1] = -1;
@@ -129,7 +134,145 @@ failed:
 	}
 }
 
-static ngx_int_t
+ngx_int_t
+ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags)
+{
+    int                events;
+    uint32_t           revents;
+    ngx_int_t          instance, i;
+    ngx_uint_t         level;
+    ngx_err_t          err;
+    ngx_event_t       *rev, *wev;
+    ngx_queue_t       *queue;
+    ngx_connection_t  *c;
+
+    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                   "epoll timer: %M", timer);
+
+    events = epoll_wait(ep, event_list, (int) nevents, timer);
+
+    err = (events == -1) ? ngx_errno : 0;
+
+#if 0
+    if (flags & NGX_UPDATE_TIME || ngx_event_timer_alarm) {
+        ngx_time_update();
+    }
+#endif
+    
+    if (err) {
+        if (err == NGX_EINTR) {
+#if 0
+            if (ngx_event_timer_alarm) {
+                ngx_event_timer_alarm = 0;
+                return NGX_OK;
+            }
+#endif
+
+            level = NGX_LOG_INFO;
+
+        } else {
+            level = NGX_LOG_ALERT;
+        }
+
+        ngx_log_error(level, cycle->log, err, "epoll_wait() failed");
+        return NGX_ERROR;
+    }
+
+    if (events == 0) {
+        if (timer != NGX_TIMER_INFINITE) {
+            return NGX_OK;
+        }
+
+        ngx_log_error(NGX_LOG_ALERT, cycle->log, 0,
+                "epoll_wait() returned no events without timeout");
+        return NGX_ERROR;
+    }
+
+    for (i = 0; i < events; i++) {
+        c = event_list[i].data.ptr;
+
+        instance = (uintptr_t) c & 1;
+        c = (ngx_connection_t *) ((uintptr_t) c & (uintptr_t) ~1);
+
+        rev = c->read;
+
+        if (c->fd == -1 || rev->instance != instance) {
+            ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                           "epoll: stale event %p", c);
+            continue;
+        }
+
+        revents = event_list[i].events;
+
+        ngx_log_debug3(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                "epoll: fd:%d ev:%04XD d:%p",
+                c->fd, revents, event_list[i].data.ptr);
+
+        if (revents & (EPOLLERR|EPOLLHUP)) {
+            ngx_log_debug2(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                           "epoll_wait() error on fd:%d ev:%04XD",
+                           c->fd, revents);
+
+            /*
+             * if the error events were returned, add EPOLLIN and EPOLLOUT
+             * to handle the events at least in one active handler
+             */
+
+            revents |= EPOLLIN|EPOLLOUT;
+        }
+
+        if ((revents & EPOLLIN) && rev->active) {
+            
+            if (revents & EPOLLRDHUP) {
+                rev->pending_eof = 1;
+            }
+
+            rev->available = 1;
+
+            rev->ready =1;
+
+            if (flags & NGX_POST_EVENTS) {
+                queue = rev->accept ? &ngx_posted_accept_events
+                                    : &ngx_posted_events;
+
+                ngx_post_event(rev, queue);
+            } else {
+                rev->handler(rev);
+            }
+        }
+
+        wev = c->write;
+
+        if ((revents & EPOLLOUT) && wev->active) {
+            
+            if (c->fd == -1 || wev->instance != instance) {
+
+                /*
+                 * the stale event from a file descriptor
+                 * that was just closed in this iteration
+                 */
+
+                ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                               "epoll: stale event %p", c);
+                continue;
+            }
+
+            wev->ready = 1;
+
+            if (flags & NGX_POST_EVENTS) {
+                ngx_post_event(wev, &ngx_posted_events);
+
+            } else {
+                wev->handler(wev);
+            }
+        }
+    }
+
+    return NGX_OK;
+}
+
+
+ngx_int_t
 ngx_epoll_init(ngx_cycle_t *cycle)
 {
 	if (ep == -1) {
@@ -141,10 +284,11 @@ ngx_epoll_init(ngx_cycle_t *cycle)
 			return NGX_ERROR;
 		}	
 
+#if 0
 		if (ngx_epoll_notify_init(cycle->log) != NGX_OK) {
-			//
+			// NULL
 		}
-
+#endif
 		ngx_epoll_test_rdhup(cycle);
 	}
 
@@ -159,6 +303,7 @@ ngx_epoll_init(ngx_cycle_t *cycle)
 	}
 
 	//nevents = epcf->events;
+    //nevents = 512;
 	//ngx_io = ngx_os_io;
 	
 	ngx_event_flags = NGX_USE_CLEAR_EVENT | NGX_USE_GREEDY_EVENT | NGX_USE_EPOLL_EVENT;
@@ -166,7 +311,7 @@ ngx_epoll_init(ngx_cycle_t *cycle)
 	return NGX_OK;
 }
 
-static void 
+void 
 ngx_epoll_done(ngx_cycle_t *cycle)
 {
 	if (close(ep) == -1) {
@@ -189,7 +334,7 @@ ngx_epoll_done(ngx_cycle_t *cycle)
 	nevents = 0;
 }
 
-static ngx_int_t
+ngx_int_t
 ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 {
 	int						op;
@@ -203,14 +348,19 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 
 	events = (uint32_t) event;
 
-	if (evnet == NGX_READ_EVENT) {
+    // 读写同操作一个fd, 所以要防止加读\写事件覆盖了之前的读\写事件
+	if (event == NGX_READ_EVENT) {
 		e = c->write;
 		prev = EPOLLOUT;
+#if (NGX_READ_EVENT != EPOLLIN|EPOLLRDHUP)
 	    events = EPOLLIN | EPOLLRDHUP;	
+#endif        
 	} else {
 		e = c->read;
 		prev = EPOLLIN | EPOLLRDHUP;
+#if (NGX_WRITE_EVENT != EPOLLOUT)
 		events = EPOLLOUT;
+#endif
 	}
 
 	if (e->active) {
@@ -234,14 +384,14 @@ ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 	return NGX_OK;
 }
 
-static ngx_int_t	
-ngx_epoll_del_event(ngx_event *ev, ngx_int_t event, ngx_uint_t flags)
+ngx_int_t	
+ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 {
 	int					op;
-	ngx_event			*e;
-	ngx_connection_t	*c;
-	struct epoll_fd		ee;
 	uint32_t			prev;
+	ngx_event_t			*e;
+	ngx_connection_t	*c;
+	struct epoll_event	ee;
 
 	if (flags & NGX_CLOSE_EVENT) {
 		ev->active = 0;
@@ -249,9 +399,11 @@ ngx_epoll_del_event(ngx_event *ev, ngx_int_t event, ngx_uint_t flags)
 	}
 
 	c = ev->data;
+
 	if (event == NGX_READ_EVENT) {
 		e = c->write;
 		prev = EPOLLOUT;
+
 	} else {
 		e = c->read;
 		prev = EPOLLIN|EPOLLRDHUP;
@@ -261,6 +413,7 @@ ngx_epoll_del_event(ngx_event *ev, ngx_int_t event, ngx_uint_t flags)
 		op = EPOLL_CTL_MOD;
 		ee.events = prev | (uint32_t) flags;
 		ee.data.ptr = (void *)((uintptr_t) c | ev->instance);
+
 	} else {
 		op = EPOLL_CTL_DEL;
 		ee.events = 0;
@@ -277,8 +430,3 @@ ngx_epoll_del_event(ngx_event *ev, ngx_int_t event, ngx_uint_t flags)
 
 	return NGX_OK;
 }
-
-
-
-
-

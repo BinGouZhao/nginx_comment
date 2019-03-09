@@ -5,6 +5,7 @@ LINK =	$(CC)
 
 ALL_INCS = -I src/core \
 	-I src/os/unix \
+	-I src/event
 
 CORE_DEPS = src/core/nginx.h \
 	src/core/ngx_config.h \
@@ -27,9 +28,14 @@ CORE_DEPS = src/core/nginx.h \
 	src/os/unix/ngx_os.h \
 	src/os/unix/ngx_process_cycle.h \
 	src/os/unix/ngx_channel.h \
-	src/os/unix/ngx_errno.h
+	src/os/unix/ngx_errno.h \
+	src/event/ngx_event.h \
+	src/event/ngx_event_timer.h \
+	src/event/ngx_event_posted.h 
+	
 
 CORE_INCS = -I src/core \
+	-I src/event \
 	-I src/os/unix 
 
 build:	binary modules
@@ -56,7 +62,13 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/os/unix/ngx_process_cycle.o \
 	objs/src/os/unix/ngx_channel.o \
 	objs/src/core/ngx_file.o \
-	objs/src/os/unix/ngx_files.o 
+	objs/src/os/unix/ngx_files.o \
+	objs/src/event/ngx_event.o \
+	objs/src/event/ngx_event_timer.o \
+	objs/src/event/ngx_event_posted.o \
+	objs/src/event/ngx_epoll.o \
+	objs/src/event/ngx_event_accept.o 
+	
 
 	$(LINK) -o objs/nginx \
 	objs/src/core/nginx.o \
@@ -79,6 +91,12 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/os/unix/ngx_process_cycle.o \
 	objs/src/core/ngx_file.o \
 	objs/src/os/unix/ngx_channel.o \
+	objs/src/event/ngx_event.o \
+	objs/src/event/ngx_event_timer.o \
+	objs/src/event/ngx_event_posted.o \
+	objs/src/event/ngx_epoll.o \
+	objs/src/event/ngx_event_accept.o \
+	objs/src/core/ngx_rbtree.o \
 	-ldl -lpthread -lcrypt -lpcre -lz \
 	-Wl,-E
 	
@@ -211,5 +229,38 @@ objs/src/os/unix/ngx_channel.o:	$(CORE_DEPS) \
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/os/unix/ngx_channel.o \
 		src/os/unix/ngx_channel.c
+
+objs/src/event/ngx_event.o:	$(CORE_DEPS) \
+	src/event/ngx_event.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/ngx_event.o \
+		src/event/ngx_event.c
+
+
+objs/src/event/ngx_event_timer.o:	$(CORE_DEPS) \
+	src/event/ngx_event_timer.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/ngx_event_timer.o \
+		src/event/ngx_event_timer.c
+
+
+objs/src/event/ngx_event_posted.o:	$(CORE_DEPS) \
+	src/event/ngx_event_posted.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/ngx_event_posted.o \
+		src/event/ngx_event_posted.c
+
+
+objs/src/event/ngx_event_accept.o:	$(CORE_DEPS) \
+	src/event/ngx_event_accept.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/ngx_event_accept.o \
+		src/event/ngx_event_accept.c
+
+objs/src/event/ngx_epoll.o:	$(CORE_DEPS) \
+	src/event/ngx_epoll.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/event/ngx_epoll.o \
+		src/event/ngx_epoll.c
 
 

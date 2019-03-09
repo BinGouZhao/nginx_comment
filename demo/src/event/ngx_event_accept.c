@@ -2,29 +2,33 @@
 #include <ngx_core.h>
 #include <ngx_event.h>
 
-static ngx_int_t ngx_enable_accept_events(ngx_cycle_t *cycle);
 static ngx_int_t ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all);
 static void ngx_close_accepted_connection(ngx_connection_t *c);
 
-void ngx_event_accept(ngx_event *ev)
+void
+ngx_event_accept(ngx_event_t *ev)
 {
-	socklen_t			socklen;
-	ngx_err_t			err;
-	ngx_log_t			*log;
-	ngx_uint_t			level;
-	ngx_socket_t		s;
-	ngx_event_t			*rev, *wev;
-	ngx_sockaddr_t		sa;
-	ngx_listening_t		*ls;
-	ngx_connection_t	*c, *lc;
+    socklen_t          socklen;
+    ngx_err_t          err;
+    ngx_log_t         *log;
+    ngx_uint_t         level;
+    ngx_socket_t       s;
+    ngx_event_t       *rev, *wev;
+    ngx_sockaddr_t     sa;
+    ngx_listening_t   *ls;
+    ngx_connection_t  *c, *lc;
+    //ngx_event_conf_t  *ecf;
 
-	if (ev->timeout) {
+//    static ngx_uint_t  use_accept4 = 1;
+
+	if (ev->timedout) {
 		if (ngx_enable_accept_events((ngx_cycle_t *) ngx_cycle) != NGX_OK) {
 			return;
 		}
 
-		ev->timeout = 0;
+		ev->timedout = 0;
 	}
+
 	ev->available = 1;
 
 	lc = ev->data;
@@ -44,7 +48,7 @@ void ngx_event_accept(ngx_event *ev)
 
 			if (err == NGX_EAGAIN) {
 				ngx_log_debug0(NGX_LOG_DEBUG_EVENT, ev->log, err,
-						"accept() not ready");
+						       "accept() not ready");
 				return;
 			}
 
@@ -52,6 +56,7 @@ void ngx_event_accept(ngx_event *ev)
 
 			if (err == NGX_ECONNABORTED) {
 				level = NGX_LOG_ERR;
+
 			} else if (err == NGX_EMFILE || err == NGX_ENFILE) {
 				level = NGX_LOG_CRIT;
 			}
@@ -65,19 +70,22 @@ void ngx_event_accept(ngx_event *ev)
 			}
 
 			if (err == NGX_EMFILE || err == NGX_ENFILE) {
-				if (ngx_disable_accept_events((ngx_cycle *) ngx_cycle, 1) != NGX_OK) {
+				if (ngx_disable_accept_events((ngx_cycle_t *) ngx_cycle, 1) 
+                        != NGX_OK) 
+                {
 					return;
 				}
 
 				if (ngx_use_accept_mutex) {
 					if (ngx_accept_mutex_held) {
-						ngx_shmtx_unlock(&ngx_accept_mutex);
+						//ngx_shmtx_unlock(&ngx_accept_mutex);
 						ngx_accept_mutex_held = 0;
 					}
 
 					ngx_accept_disabled = 1;
+
 				} else {
-					ngx_add_timer(ev, 100);
+					//ngx_add_timer(ev, 100);
 				}
 			}
 
@@ -106,12 +114,12 @@ void ngx_event_accept(ngx_event *ev)
 			return;
 		}
 
-		if (socklen > (socklent_t) sizeof(ngx_sockaddr_t)) {
+		if (socklen > (socklen_t) sizeof(ngx_sockaddr_t)) {
 			socklen = sizeof(ngx_sockaddr_t);
 		}
 
 		c->sockaddr = ngx_palloc(c->pool, socklen);
-		if (c->sockddr == NULL) {
+		if (c->sockaddr == NULL) {
 			ngx_close_accepted_connection(c);
 			return;
 		}
@@ -133,10 +141,10 @@ void ngx_event_accept(ngx_event *ev)
 		
 		*log = ls->log;
 
-		c->recv = ngx_recv;
-		c->send = ngx_send;
-		c->recv_chain = ngx_recv_chain;
-		c->send_chain = ngx_send_chain;
+		//c->recv = ngx_recv;
+		//c->send = ngx_send;
+		//c->recv_chain = ngx_recv_chain;
+		//c->send_chain = ngx_send_chain;
 
 		c->log = log;
 		c->pool->log = log;
@@ -154,12 +162,13 @@ void ngx_event_accept(ngx_event *ev)
 		rev->log = log;
 		wev->log = log;
 
-		c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
+		//c->number = ngx_atomic_fetch_add(ngx_connection_counter, 1);
 
-		log->data = NULL;
+        log->data = NULL;
 		log->handler = NULL;
 
-		ls->handler(c);
+		//ls->handler(c);
+        ngx_close_accepted_connection(c);
 	} while (ev->available);
 }
 
@@ -173,7 +182,7 @@ ngx_close_accepted_connection(ngx_connection_t *c)
 	fd = c->fd;
 	c->fd = (ngx_socket_t) -1;
 
-	if (!c->shared && ngx_close_socket(fd) == -1) {
+	if (ngx_close_socket(fd) == -1) {
 		ngx_log_error(NGX_LOG_ALERT, c->log, ngx_socket_errno,
 					  "close() failed");
 	}
@@ -206,7 +215,7 @@ ngx_disable_accept_events(ngx_cycle_t *cycle, ngx_uint_t all)
 	return NGX_OK;
 }
 
-static ngx_int_t
+ngx_int_t
 ngx_enable_accept_events(ngx_cycle_t *cycle) 
 {
 	ngx_uint_t			i;

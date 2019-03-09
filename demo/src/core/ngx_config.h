@@ -1,6 +1,10 @@
 #ifndef _NGX_CONFIG_H_INCLUDED_
 #define _NGX_CONFIG_H_INCLUDED_
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -20,6 +24,8 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <arpa/inet.h>
+#include <sys/epoll.h>
+#include <sys/eventfd.h>
 
 #define ngx_signal_helper(n)     SIG##n
 #define ngx_signal_value(n)      ngx_signal_helper(n)
