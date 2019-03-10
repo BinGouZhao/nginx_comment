@@ -367,3 +367,136 @@ ngx_free_connection(ngx_connection_t *c)
     }
 }
 
+void
+ngx_close_connection(ngx_connection_t *c)
+{
+    ngx_err_t       err;
+    ngx_uint_t      log_error, level;
+    ngx_socket_t    fd;
+
+    if (c->fd == (ngx_socket_t) -1) {
+        ngx_log_error(NGX_LOG_ALERT, c->log, 0, "connection already closed");
+        return;
+    }
+
+    if (c->read->timer_set) {
+        ngx_del_timer(c->read);
+    }
+
+    if (c->write->timer_set) {
+        ngx_del_timer(c->write);
+    }
+
+    if (!c->shared) {
+        if (1) {
+            ngx_del_conn(c, NGX_CLOSE_EVENT);
+
+        } else {
+            if (c->read->active || c->read->disabled) {
+                ngx_del_event(c->read, NGX_READ_EVENT, NGX_CLOSE_EVENT);
+            }
+
+            if (c->write->active || c->write->disabled) {
+                ngx_del_event(c->write, NGX_WRITE_EVENT, NGX_CLOSE_EVENT);
+            }
+        }
+    }
+
+    if (c->read->posted) {
+        ngx_delete_posted_event(c->read);
+    }
+
+    if (c->write->posted) {
+        ngx_delete_posted_event(c->write);
+    }
+
+    c->read->closed = 1;
+    c->write->closed = 1;
+
+    ngx_reusable_connection(c, 0);
+
+    log_error = c->log_error;
+
+    ngx_free_connection(c);
+
+    fd = c->fd;
+    c->fd = (ngx_socket_t) -1;
+
+    if (c->shared) {
+        return;
+    }
+
+    if (ngx_close_socket(fd) == -1) {
+
+        err = ngx_socket_errno;
+
+        if (err == NGX_ECONNRESET || err == NGX_ENOTCONN) {
+
+           switch (log_error) {
+
+               default:
+                level = NGX_LOG_CRIT;
+            }
+
+        } else {
+            level = NGX_LOG_CRIT;
+        }
+
+        ngx_log_error(level, c->log, err, ngx_close_socket_n " %d failed", fd);
+    }
+}
+
+ngx_int_t
+ngx_connection_error(ngx_connection_t *c, ngx_err_t err, char *text)
+{
+    ngx_uint_t      level;
+
+    /* Winsock may return NGX_ECONNABORTED instead of NGX_ECONNRESET */
+
+    if ((err == NGX_ECONNRESET))
+    {
+        return 0;
+    }
+
+    if (err == 0
+        || err == NGX_ECONNRESET
+        || err == NGX_EPIPE
+        || err == NGX_ENOTCONN
+        || err == NGX_ETIMEDOUT
+        || err == NGX_ECONNREFUSED
+        || err == NGX_ENETDOWN
+        || err == NGX_ENETUNREACH
+        || err == NGX_EHOSTDOWN
+        || err == NGX_EHOSTUNREACH)
+    {
+        level = NGX_LOG_ERR;
+
+    } else {
+        level = NGX_LOG_ALERT;
+    }
+
+    ngx_log_error(level, c->log, err, text);
+
+    return NGX_ERROR;
+}
+
+void ngx_reusable_connection(ngx_connection_t *c, ngx_uint_t reusable)
+{
+    ngx_log_debug1(NGX_LOG_DEBUG_CORE, c->log, 0,
+                   "reusable connection: %ui", reusable);
+
+    if (c->reusable) {
+        ngx_queue_remove(&c->queue);
+        ngx_cycle->reusable_connections_n--;
+    }
+
+    c->reusable = reusable;
+
+    if (reusable) {
+
+        ngx_queue_insert_head(
+                (ngx_queue_t *) &ngx_cycle->reusable_connections_queue, &c->queue);
+        ngx_cycle->reusable_connections_n++;
+    }
+}
+ 

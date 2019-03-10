@@ -430,3 +430,39 @@ ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags)
 
 	return NGX_OK;
 }
+
+ngx_int_t
+ngx_epoll_del_connection(ngx_connection_t *c, ngx_uint_t flags)
+{
+    int                 op;
+    struct epoll_event  ee;
+
+    if (flags & NGX_CLOSE_EVENT) {
+        c->read->active = 0;
+        c->write->active = 0;
+        return NGX_OK;
+    }
+
+    ngx_log_debug1(NGX_LOG_DEBUG_EVENT, c->log, 0,
+                   "epoll del connection: fd:%d", c->fd);
+
+    op = EPOLL_CTL_DEL;
+    ee.events = 0;
+    ee.data.ptr = NULL;
+
+    if (epoll_ctl(ep, op, c->fd, &ee) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, c->log, ngx_errno,
+                      "epoll_ctl(%d, %d) failed", op, c->fd);
+        return NGX_ERROR;
+    }
+
+    c->read->active = 0;
+    c->write->active = 0;
+
+    return NGX_OK;
+}
+
+
+
+
+

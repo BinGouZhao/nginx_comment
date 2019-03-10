@@ -141,8 +141,8 @@ ngx_event_accept(ngx_event_t *ev)
 		
 		*log = ls->log;
 
-		//c->recv = ngx_recv;
-		//c->send = ngx_send;
+		c->recv = ngx_unix_recv;
+		c->send = ngx_unix_send;
 		//c->recv_chain = ngx_recv_chain;
 		//c->send_chain = ngx_send_chain;
 
@@ -168,7 +168,7 @@ ngx_event_accept(ngx_event_t *ev)
 		log->handler = NULL;
 
 		//ls->handler(c);
-        ngx_close_accepted_connection(c);
+        ngx_http_init_connection(c);
 	} while (ev->available);
 }
 

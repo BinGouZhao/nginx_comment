@@ -168,3 +168,19 @@ ngx_event_process_init(ngx_cycle_t *cycle)
 	return NGX_OK;
 }
 
+ngx_int_t
+ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
+{
+    if (!rev->active && !rev->ready) {
+        if (ngx_add_event(rev, NGX_READ_EVENT, NGX_CLEAR_EVENT)
+                == NGX_ERROR)
+        {
+            return NGX_ERROR;
+        }
+    }
+
+    return NGX_OK;
+}
+
+
+

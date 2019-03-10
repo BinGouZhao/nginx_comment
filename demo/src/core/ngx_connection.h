@@ -42,6 +42,8 @@ struct ngx_connection_s {
     ngx_send_pt         send;
 
     ngx_listening_t     *listening;
+
+    off_t               sent;
     
     ngx_pool_t          *pool;
     ngx_log_t           *log;
@@ -54,11 +56,19 @@ struct ngx_connection_s {
     struct sockaddr     *local_sockaddr;
     socklen_t           local_socklen;
 
+    ngx_buf_t           *buffer;
+
     ngx_queue_t         queue;
 
     ngx_atomic_uint_t   number;
 
     unsigned            close:1;
+
+    unsigned            log_error:3;
+
+    unsigned            reusable:1;
+    unsigned            destroyed:1;
+    unsigned            shared:1;
 };
 
 ngx_int_t ngx_open_listening_sockets(ngx_cycle_t *cycle);
@@ -67,6 +77,10 @@ void ngx_configure_listening_sockets(ngx_cycle_t *cycle);
 
 ngx_connection_t *ngx_get_connection(ngx_socket_t fd, ngx_log_t *log);
 void ngx_free_connection(ngx_connection_t *c);
+ngx_int_t ngx_connection_error(ngx_connection_t *c, ngx_err_t err, char *text);
+void ngx_close_connection(ngx_connection_t *c);
+
+void ngx_reusable_connection(ngx_connection_t *c, ngx_uint_t reusable);
 
 #endif /* _NGX_CONNECTION_H_INCLUDED_ */
  

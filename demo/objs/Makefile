@@ -5,6 +5,7 @@ LINK =	$(CC)
 
 ALL_INCS = -I src/core \
 	-I src/os/unix \
+	-I src/http \
 	-I src/event
 
 CORE_DEPS = src/core/nginx.h \
@@ -14,6 +15,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/core/ngx_palloc.h \
 	src/core/ngx_string.h \
 	src/core/ngx_file.h \
+	src/core/ngx_buf.h \
 	src/core/ngx_times.h \
 	src/os/unix/ngx_files.h \
 	src/os/unix/ngx_atomic.h \
@@ -36,7 +38,12 @@ CORE_DEPS = src/core/nginx.h \
 
 CORE_INCS = -I src/core \
 	-I src/event \
+	-I src/http \
 	-I src/os/unix 
+
+HTTP_DEPS = src/http/ngx_http_request.h
+
+HTTP_INCS = -I src/http 
 
 build:	binary modules
 
@@ -45,6 +52,7 @@ binary:	objs/nginx
 objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_log.o \
 	objs/src/core/ngx_palloc.o \
+	objs/src/core/ngx_buf.o \
 	objs/src/core/ngx_rbtree.o \
 	objs/src/core/ngx_array.o \
 	objs/src/core/ngx_times.o \
@@ -67,6 +75,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/ngx_event_timer.o \
 	objs/src/event/ngx_event_posted.o \
 	objs/src/event/ngx_epoll.o \
+	objs/src/http/ngx_http_request.o \
+	objs/src/os/unix/ngx_send.o \
+	objs/src/os/unix/ngx_recv.o \
 	objs/src/event/ngx_event_accept.o 
 	
 
@@ -75,6 +86,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_log.o \
 	objs/src/core/ngx_palloc.o \
 	objs/src/core/ngx_array.o \
+	objs/src/core/ngx_buf.o \
 	objs/src/core/ngx_string.o \
 	objs/src/core/ngx_times.o \
 	objs/src/core/ngx_cycle.o \
@@ -97,6 +109,9 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/ngx_epoll.o \
 	objs/src/event/ngx_event_accept.o \
 	objs/src/core/ngx_rbtree.o \
+	objs/src/http/ngx_http_request.o \
+	objs/src/os/unix/ngx_send.o \
+	objs/src/os/unix/ngx_recv.o \
 	-ldl -lpthread -lcrypt -lpcre -lz \
 	-Wl,-E
 	
@@ -263,4 +278,27 @@ objs/src/event/ngx_epoll.o:	$(CORE_DEPS) \
 		-o objs/src/event/ngx_epoll.o \
 		src/event/ngx_epoll.c
 
+objs/src/core/ngx_buf.o:	$(CORE_DEPS) \
+	src/core/ngx_buf.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/core/ngx_buf.o \
+		src/core/ngx_buf.c
+
+objs/src/http/ngx_http_request.o:	$(CORE_DEPS) $(HTTP_DEPS) \
+	src/http/ngx_http_request.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
+		-o objs/src/http/ngx_http_request.o \
+		src/http/ngx_http_request.c
+
+objs/src/os/unix/ngx_send.o:	$(CORE_DEPS) \
+	src/os/unix/ngx_send.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/os/unix/ngx_send.o \
+		src/os/unix/ngx_send.c
+
+objs/src/os/unix/ngx_recv.o:	$(CORE_DEPS) \
+	src/os/unix/ngx_recv.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/os/unix/ngx_recv.o \
+		src/os/unix/ngx_recv.c
 

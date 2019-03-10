@@ -217,3 +217,23 @@ ngx_pnalloc(ngx_pool_t *pool, size_t size)
     return ngx_palloc_large(pool, size);
 }
 
+ngx_int_t
+ngx_pfree(ngx_pool_t *pool, void *p) 
+{
+    ngx_pool_large_t    *l;
+
+    for (l = pool->large; l; l = l->next) {
+        if (p == l->alloc) {
+            ngx_log_debug1(NGX_LOG_DEBUG_ALLOC, pool->log, 0,
+                    "free: %p", l->alloc);
+            ngx_free(l->alloc);
+            l->alloc = NULL;
+
+            return NGX_OK;
+        }
+    }
+
+    return NGX_DECLINED;
+}
+
+

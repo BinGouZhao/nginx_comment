@@ -44,4 +44,6 @@ void *ngx_palloc(ngx_pool_t *pool, size_t size);
 void *ngx_pnalloc(ngx_pool_t *pool, size_t size);
 void *ngx_pcalloc(ngx_pool_t *pool, size_t size);
 
+ngx_int_t ngx_pfree(ngx_pool_t *pool, void *p);
+
 #endif
