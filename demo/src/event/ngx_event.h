@@ -3,7 +3,7 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
-#include <ngx_http_request.h>
+#include <ngx_http.h>
 
 #define NGX_CLOSE_EVENT         1
 #define NGX_DISABLE_EVENT       2

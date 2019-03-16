@@ -16,6 +16,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/core/ngx_string.h \
 	src/core/ngx_file.h \
 	src/core/ngx_buf.h \
+	src/core/ngx_list.h \
 	src/core/ngx_times.h \
 	src/os/unix/ngx_files.h \
 	src/os/unix/ngx_atomic.h \
@@ -41,7 +42,8 @@ CORE_INCS = -I src/core \
 	-I src/http \
 	-I src/os/unix 
 
-HTTP_DEPS = src/http/ngx_http_request.h
+HTTP_DEPS = src/http/ngx_http.h \
+			src/http/ngx_http_request.h
 
 HTTP_INCS = -I src/http 
 
@@ -76,8 +78,10 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/ngx_event_posted.o \
 	objs/src/event/ngx_epoll.o \
 	objs/src/http/ngx_http_request.o \
+	objs/src/http/ngx_http_parse.o \
 	objs/src/os/unix/ngx_send.o \
 	objs/src/os/unix/ngx_recv.o \
+	objs/src/core/ngx_list.o \
 	objs/src/event/ngx_event_accept.o 
 	
 
@@ -110,8 +114,10 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/ngx_event_accept.o \
 	objs/src/core/ngx_rbtree.o \
 	objs/src/http/ngx_http_request.o \
+	objs/src/http/ngx_http_parse.o \
 	objs/src/os/unix/ngx_send.o \
 	objs/src/os/unix/ngx_recv.o \
+	objs/src/core/ngx_list.o \
 	-ldl -lpthread -lcrypt -lpcre -lz \
 	-Wl,-E
 	
@@ -301,4 +307,18 @@ objs/src/os/unix/ngx_recv.o:	$(CORE_DEPS) \
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
 		-o objs/src/os/unix/ngx_recv.o \
 		src/os/unix/ngx_recv.c
+
+objs/src/http/ngx_http_parse.o:	$(CORE_DEPS) $(HTTP_DEPS) \
+	src/http/ngx_http_parse.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
+		-o objs/src/http/ngx_http_parse.o \
+		src/http/ngx_http_parse.c
+
+
+objs/src/core/ngx_list.o:	$(CORE_DEPS) \
+	src/core/ngx_list.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/core/ngx_list.o \
+		src/core/ngx_list.c
+
 

@@ -62,10 +62,14 @@ struct ngx_connection_s {
 
     ngx_atomic_uint_t   number;
 
+    ngx_uint_t          requests;
+
     unsigned            close:1;
 
     unsigned            log_error:3;
 
+    unsigned            timedout:1;
+    unsigned            error:1;
     unsigned            reusable:1;
     unsigned            destroyed:1;
     unsigned            shared:1;
