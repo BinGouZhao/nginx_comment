@@ -7,6 +7,9 @@ static void ngx_http_process_request_line(ngx_event_t *rev);
 static ssize_t ngx_http_read_request_header(ngx_http_request_t *r);
 static void ngx_http_close_request(ngx_http_request_t *r, ngx_int_t rc);
 static void ngx_http_process_request_headers(ngx_event_t *rev);
+static u_char *ngx_websocket_build_accept_key(ngx_http_request_t *r, u_char *key);
+static void ngx_websocket_request_handler(ngx_event_t *ev);
+static void ngx_websocket_writer(ngx_http_request_t *r);
 
 static char *ngx_http_client_errors[] = {
 
@@ -234,6 +237,7 @@ ngx_http_process_request_line(ngx_event_t *rev)
 				ngx_http_process_request(r);
 				return;
 			}
+#endif
 
 			if (ngx_list_init(&r->headers_in.headers, r->pool, 20,
 						sizeof(ngx_table_elt_t))
@@ -242,7 +246,6 @@ ngx_http_process_request_line(ngx_event_t *rev)
 				ngx_http_close_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
 				return;
 			}
-#endif
 
 			c->log->action = "reading client request headers";
 
@@ -358,6 +361,7 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 	ngx_connection_t		*c;
 	ngx_http_request_t		*r;
 	ngx_int_t				rc; //, rv;
+    ngx_table_elt_t         *h;
 
 	c = rev->data;
 	r = c->data;
@@ -381,6 +385,7 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 			if (r->header_in->pos == r->header_in->end) {
 
 				// todo
+                ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
 			}
 
 			n = ngx_http_read_request_header(r);
@@ -394,14 +399,11 @@ ngx_http_process_request_headers(ngx_event_t *rev)
         
         ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0, "parse header: %d", rc);
         
-        ngx_http_close_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-        return;
-#if 0
 		if (rc == NGX_OK) {
 
 			r->request_length += r->header_in->pos - r->header_name_start;
 
-			if (r->invalid_header && cscf->ignore_invalid_headers) {
+			if (r->invalid_header) {
 
 				/* there was error while a header line parsing */
 
@@ -443,13 +445,27 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 				ngx_strlow(h->lowcase_key, h->key.data, h->key.len);
 			}
 
+            // 升级协议到websocket
+            if (ngx_strncmp(h->lowcase_key, "upgrade", strlen("upgrade")) == 0 && 
+                ngx_strncmp(h->value.data, "websocket", strlen("websocket")) == 0)
+            {
+                r->upgrade = 1;
+            }
+
+            // 验证 key
+            if (ngx_strncmp(h->lowcase_key, "sec-websocket-key", 
+                strlen("sec-websocket-key")) == 0) 
+            {
+                r->sec_websocket_key = h->value.data;
+            }
+#if 0
 			hh = ngx_hash_find(&cmcf->headers_in_hash, h->hash,
 					h->lowcase_key, h->key.len);
 
 			if (hh && hh->handler(r, h, hh->offset) != NGX_OK) {
 				return;
 			}
-
+#endif
 			ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
 					"http header: \"%V: %V\"",
 					&h->key, &h->value);
@@ -468,15 +484,16 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 
 			r->http_state = NGX_HTTP_PROCESS_REQUEST_STATE;
 
+#if 0
 			rc = ngx_http_process_request_header(r);
 
 			if (rc != NGX_OK) {
-				return;
+                break;
 			}
+#endif
 
 			ngx_http_process_request(r);
-
-			return;
+            break;
 		}
 
 		if (rc == NGX_AGAIN) {
@@ -493,27 +510,21 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 
 		ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
 		return;
-#endif
 	}
+
+    //ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
 }
 
 void 
 ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc) 
 {
-    ngx_http_close_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-    return;
-
-#if 0
     ngx_connection_t    *c;
-    ngx_http_request_t  $pr;
+    static char         *response = "HTTP/1.1 403 Forbidden\r\n";
 
     c = r->connection;
-    ngx_log_debug5(NGX_LOG_DEBUG_HTTP, c->log, 0,
-                   "http finalize request: %i, \"%V?%V\" a:%d, c:%d",
-                   rc, &r->uri, &r->args, r == c->data, r->main->count);
 
-    if (rc == NGX_DONE) {
-        ngx_http_finalize_connection(r);
+    if (rc == NGX_OK) {
+        ngx_http_close_request(r, NGX_OK);
         return;
     }
 
@@ -522,19 +533,27 @@ ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc)
         || rc == NGX_HTTP_CLIENT_CLOSED_REQUEST
         || c->error)
     {
-        if (ngx_http_post_action(r) == NGX_OK) {
-            return;
-        }
-
-        ngx_http_terminate_request(r, rc);
+        ngx_http_close_request(r, NGX_ERROR);
         return;
     }
 
-#endif
+    if (rc >= NGX_HTTP_SPECIAL_RESPONSE) {
+        r->error = 1;
+
+        sprintf((char *)r->buffer->start, response);
+
+        r->buffer->pos = r->buffer->start;
+        r->buffer->last = r->buffer->pos + ngx_strlen(r->buffer->start);
+
+        ngx_websocket_writer(r);
+        return;
+    }
+
+    ngx_http_close_request(r, NGX_DONE);
+    return;
 }
 
 
-/*
 void
 ngx_http_process_request(ngx_http_request_t *r)
 {
@@ -543,107 +562,73 @@ ngx_http_process_request(ngx_http_request_t *r)
 	c = r->connection;
 
 	if (c->read->timer_set) {
-		ngx_del_timer(c->read);
+//		ngx_del_timer(c->read);
 	}
 
-#if 0
-    c->read->handler = ngx_http_request_handler;
-    c->write->handler = ngx_http_request_handler;
-    r->read_event_handler = ngx_http_block_reading;
-
-    ngx_http_handler(r);
-
-    ngx_http_run_posted_requests(c);
-#endif 
+    c->read->handler = ngx_http_empty_handler;
+    c->write->handler = ngx_websocket_request_handler;
+    
+    //ngx_http_handler(r);
+    ngx_websocket_handler(r);
 }
-*/
 
-#if 0
-static ngx_table_elt_t *
-ngx_http_ws_find_key_header(ngx_http_request_t *r)
+void 
+ngx_websocket_handler(ngx_http_request_t *r) 
 {
-	ngx_table_elt_t *key_header = NULL;
-	ngx_list_part_t *part = &r->headers_in.headers.part;
-	ngx_table_elt_t *headers = part->elts;
-	for (ngx_uint_t i = 0; /* void */; i++) {
-		if (i >= part->nelts) {
-			if (part->next == NULL) {
-				break;
-			}
-			part = part->next;
-			headers = part->elts;
-			i = 0;
-		}
+    u_char              *sec_websocket_accept;
+    static char         *ws_accept = "HTTP/1.1 101 Switching Protocols\r\n"		\
+                                      "Upgrade: websocket\r\n"				    \
+                                      "Connection: Upgrade\r\n"				    \
+                                      "Sec-WebSocket-Accept: %s\r\n"			\
+                                      "Sec-WebSocket-Version: 13";               
 
-		if (headers[i].hash == 0) {
-			continue;
-		}
+    if (!r->upgrade || r->sec_websocket_key == NULL) {
+        ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
+        return;
+    }
 
-		if (0 == ngx_strncmp(headers[i].key.data, (u_char *) "Sec-WebSocket-Key", headers[i].key.len)) {
-			key_header = &headers[i];
-		}
-	}
+    sec_websocket_accept = ngx_websocket_build_accept_key(r, r->sec_websocket_key);
+    if (sec_websocket_accept == NULL) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
 
-	return key_header;
+    sprintf((char *)r->buffer->start, ws_accept, sec_websocket_accept);
+
+    r->buffer->pos = r->buffer->start;
+    r->buffer->last = r->buffer->pos + ngx_strlen(r->buffer->start);
+
+    ngx_websocket_writer(r);
+    return;
 }
 
 static u_char *
-ngx_http_ws_build_accept_key(ngx_table_elt_t *key_header, ngx_http_request_t *r)
+ngx_websocket_build_accept_key(ngx_http_request_t *r, u_char *key)
 {
-	ngx_str_t encoded, decoded;
-	ngx_sha1_t  sha1;
-	u_char digest[20];
+	u_char          digest[20];
+	ngx_str_t       encoded, decoded;
+	ngx_sha1_t      sha1;
 
 	decoded.len = sizeof(digest);
 	decoded.data = digest;
 
 	ngx_sha1_init(&sha1);
-	ngx_sha1_update(&sha1, key_header->value.data, key_header->value.len);
-	ngx_sha1_update(&sha1, WS_UUID, sizeof(WS_UUID) - 1);
+	ngx_sha1_update(&sha1, key, ngx_strlen(key));
+	ngx_sha1_update(&sha1, WEBSOCKET_UUID, sizeof(WEBSOCKET_UUID) - 1);
 	ngx_sha1_final(digest, &sha1);
 
 	encoded.len = ngx_base64_encoded_length(decoded.len) + 1;
 	encoded.data = ngx_pnalloc(r->pool, encoded.len);
-	ngx_memzero(encoded.data, encoded.len);
+
 	if (encoded.data == NULL) {
 		return NULL;
 	}
+	ngx_memzero(encoded.data, encoded.len);
 
 	ngx_encode_base64(&encoded, &decoded);
 
 	return encoded.data;
 }
-
-#define WS_UUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
-
-
-static ngx_int_t
-ngx_http_ws_send_handshake(ngx_http_request_t *r)
-{
-	char *wb_accept = "HTTP/1.1 101 Switching Protocols\r\n"				\
-					   "Upgrade:websocket\r\n"								\
-					   "Connection: Upgrade\r\n"							\
-					   "Sec-WebSocket-Accept: %s\r\n"						\
-					   "Sec-WebSocket-Version: 13"
-					   "WebSocket-Location: ws://\r\n"						\
-					   "WebSocket-Protocol:chat\r\n\r\n";
-
-	ngx_table_elt_t	*h;
-
-	ngx_table_elt_t *key_header = ngx_http_ws_find_key_header(r);
-
-	if (key_header != NULL) {
-		u_char *accept = ngx_http_ws_build_accept_key(key_header, r);
-
-		if (accept == NULL) {
-			return NGX_ERROR;
-		}
-
-		static char accept_buffer[256];
-		sprintf(accept_buffer, wb_accept, accept);
-	}
-}
-#endif
 
 ngx_http_request_t *
 ngx_http_create_request(ngx_connection_t *c)
@@ -677,6 +662,7 @@ ngx_http_create_request(ngx_connection_t *c)
     //ngx_set_connection_log(r->connection, clcf->error_log);
 	
 	r->header_in = c->buffer;
+    r->buffer = c->buffer;
 #if 0
    if (ngx_list_init(&r->headers_out.headers, r->pool, 20,
                       sizeof(ngx_table_elt_t))
@@ -722,22 +708,22 @@ ngx_http_close_request(ngx_http_request_t *r, ngx_int_t rc)
 {
     ngx_connection_t  *c;
 
-    //r = r->main;
     c = r->connection;
 
-//    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, c->log, 0,
-//                   "http request count:%d blk:%d", r->count, r->blocked);
-#if 0
-    if (r->count == 0) {
-        ngx_log_error(NGX_LOG_ALERT, c->log, 0, "http request count is zero");
-    }
-
-    r->count--;
-
-    if (r->count || r->blocked) {
+    if (rc == NGX_OK) {
+        ngx_http_free_request(r, rc);
         return;
     }
-#endif
+
+    if (rc == NGX_ERROR
+        || rc == NGX_HTTP_REQUEST_TIME_OUT
+        || rc == NGX_HTTP_CLIENT_CLOSED_REQUEST
+        || c->error)
+    {
+        ngx_http_free_request(r, rc);
+        ngx_http_close_connection(c);
+        return;
+    }
 
     ngx_http_free_request(r, rc);
     ngx_http_close_connection(c);
@@ -799,4 +785,103 @@ ngx_http_close_connection(ngx_connection_t *c)
     ngx_close_connection(c);
 
     ngx_destroy_pool(pool);
+}
+
+static void
+ngx_websocket_writer(ngx_http_request_t *r)
+{
+    ssize_t             n, send;
+    ngx_int_t           rc;
+    ngx_connection_t    *c;
+    ngx_event_t         *wev;
+
+    c = r->connection;
+    wev = c->write;
+
+    if (wev->timedout) {
+        ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT,
+                      "client timed out");
+        c->timedout = 1;
+
+        ngx_http_finalize_request(r, NGX_HTTP_REQUEST_TIME_OUT);
+        return;
+    }
+
+    rc = r->error ? NGX_DONE : NGX_OK;
+    send = r->buffer->last - r->buffer->pos;
+
+    if (send <= 0) {
+        
+        ngx_http_finalize_request(r, rc);
+        return;
+    }
+
+    n = c->send(c, r->buffer->pos, (size_t) send);
+
+    if (n == NGX_AGAIN) {
+
+        if (!wev->timer_set) {
+//            ngx_add_timer(wev, NGX_SEND_RESPONSE_TIMEOUT);
+            ngx_reusable_connection(c, 1);
+        }
+
+        if (ngx_handle_write_event(wev, 0) != NGX_OK) {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
+        return;
+    }
+
+    if (n == NGX_ERROR) {
+        ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+        return;
+    }
+
+    if (n == 0) {
+        ngx_log_error(NGX_LOG_INFO, c->log, 0,
+                "client closed connection");
+        ngx_http_finalize_request(r, NGX_HTTP_CLIENT_CLOSED_REQUEST);
+        return;
+    }
+
+    r->buffer->pos += n;
+
+    if (n >= send) {
+        ngx_http_close_request(r, rc);
+        return;
+
+    } else {
+
+        if (!wev->timer_set) {
+//            ngx_add_timer(wev, NGX_SEND_RESPONSE_TIMEOUT);
+            ngx_reusable_connection(c, 1);
+        }
+
+        if (ngx_handle_write_event(wev, 0) != NGX_OK) {
+            ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+            return;
+        }
+    }
+
+    return;
+}
+
+static void
+ngx_websocket_request_handler(ngx_event_t *ev)
+{
+    ngx_connection_t    *c;
+    ngx_http_request_t  *r;
+
+    c = ev->data;
+    r = c->data;
+
+    if (c->close) {
+        ngx_http_finalize_request(r, 0);
+        return;
+    }
+
+    if (ev->write) {
+        ngx_websocket_writer(r);
+    }
 }

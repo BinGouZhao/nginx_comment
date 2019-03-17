@@ -76,6 +76,7 @@ void ngx_process_events_and_timers(ngx_cycle_t *cycle);
 ngx_int_t ngx_event_process_init(ngx_cycle_t *cycle);
 
 ngx_int_t ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags);
+ngx_int_t ngx_handle_write_event(ngx_event_t *wev, size_t lowat);
 
 ngx_int_t ngx_enable_accept_events(ngx_cycle_t *cycle);
 

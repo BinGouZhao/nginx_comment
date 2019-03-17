@@ -1,6 +1,8 @@
 #ifndef _NGX_HTTP_REQUEST_H_INCLUDED_
 #define _NGX_HTTP_REQUEST_H_INCLUDED_
 
+#define NGX_HTTP_LC_HEADER_LEN             32
+
 #define NGX_HTTP_VERSION_9                 9
 #define NGX_HTTP_VERSION_10                1000
 #define NGX_HTTP_VERSION_11                1001
@@ -24,11 +26,33 @@
 #define NGX_HTTP_TRACE                     0x8000
 
 
+#define NGX_HTTP_PARSE_HEADER_DONE         1
+
 #define NGX_HTTP_CLIENT_ERROR              10
 #define NGX_HTTP_PARSE_INVALID_METHOD      10
 #define NGX_HTTP_PARSE_INVALID_REQUEST     11
 #define NGX_HTTP_PARSE_INVALID_VERSION     12
 #define NGX_HTTP_PARSE_INVALID_09_METHOD   13
+
+#define NGX_HTTP_PARSE_INVALID_HEADER      14
+
+#define NGX_HTTP_CONTINUE                  100
+#define NGX_HTTP_SWITCHING_PROTOCOLS       101
+#define NGX_HTTP_PROCESSING                102
+
+#define NGX_HTTP_OK                        200
+#define NGX_HTTP_CREATED                   201
+#define NGX_HTTP_ACCEPTED                  202
+#define NGX_HTTP_NO_CONTENT                204
+#define NGX_HTTP_PARTIAL_CONTENT           206
+
+#define NGX_HTTP_SPECIAL_RESPONSE          300
+#define NGX_HTTP_MOVED_PERMANENTLY         301
+#define NGX_HTTP_MOVED_TEMPORARILY         302
+#define NGX_HTTP_SEE_OTHER                 303
+#define NGX_HTTP_NOT_MODIFIED              304
+#define NGX_HTTP_TEMPORARY_REDIRECT        307
+#define NGX_HTTP_PERMANENT_REDIRECT        308
 
 #define NGX_HTTP_BAD_REQUEST               400
 #define NGX_HTTP_UNAUTHORIZED              401
@@ -46,6 +70,8 @@
 #define NGX_HTTP_MISDIRECTED_REQUEST       421
 #define NGX_HTTP_TOO_MANY_REQUESTS         429
 
+#define NGX_HTTP_CLIENT_CLOSED_REQUEST     499
+
 #define NGX_HTTP_INTERNAL_SERVER_ERROR     500
 #define NGX_HTTP_NOT_IMPLEMENTED           501
 #define NGX_HTTP_BAD_GATEWAY               502
@@ -61,10 +87,13 @@
 
 #define NGX_WS_MASK_KEY_LENGTH	4
 
+#define WEBSOCKET_UUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+
 #define NGX_CLIENT_HEADER_BUFFER_SIZE	1024
 #define NGX_POST_ACCEPT_TIMEOUT         100
 #define NGX_REQUEST_POOL_SIZE           2018
 #define NGX_CLIENT_HEADER_TIMEOUT       100
+#define NGX_SEND_RESPONSE_TIMEOUT       100
 
 
 #define NGX_WS_OPCODE_CONTINUATION		0x0
@@ -149,6 +178,7 @@ typedef struct {
 struct ngx_http_request_s {
     ngx_pool_t      *pool;
     ngx_buf_t       *header_in;
+    ngx_buf_t       *buffer;
 
     time_t          start_sec;
     ngx_msec_t      start_msec;
@@ -165,7 +195,20 @@ struct ngx_http_request_s {
 
     unsigned        count:16;
     unsigned        http_state:4;
+    unsigned        invalid_header:1;
+    unsigned        upgrade:1;
+    unsigned        error:1;
+
+    u_char          *sec_websocket_key;
+
 	ngx_uint_t		state;
+    //ngx_uint_t      sent;
+
+
+    ngx_uint_t      header_hash;
+    ngx_uint_t      lowcase_index;
+    u_char          lowcase_header[NGX_HTTP_LC_HEADER_LEN];
+
 	ngx_str_t       http_protocol;
 
     u_char          *header_name_start;

@@ -182,5 +182,30 @@ ngx_handle_read_event(ngx_event_t *rev, ngx_uint_t flags)
     return NGX_OK;
 }
 
+ngx_int_t
+ngx_handle_write_event(ngx_event_t *wev, size_t lowat)
+{   
+    //ngx_connection_t *c;
+#if 0
+    if (lowat) {
+        c = wev->data;
+
+        if (ngx_send_lowat(c, lowat) == NGX_ERROR) {
+            return NGX_ERROR;
+        }
+    }
+#endif
 
 
+    if (!wev->active && !wev->ready) {
+        if (ngx_add_event(wev, NGX_WRITE_EVENT,
+//                    NGX_CLEAR_EVENT | (lowat ? NGX_LOWAT_EVENT : 0))
+                    NGX_CLEAR_EVENT)
+                == NGX_ERROR)
+        {
+            return NGX_ERROR;
+        }
+    }
+
+    return NGX_OK;
+}

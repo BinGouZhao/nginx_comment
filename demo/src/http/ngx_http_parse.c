@@ -288,13 +288,10 @@ ngx_int_t
 ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 	ngx_uint_t	allow_underscores)
 {
-    //ngx_http_close_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
-    return NGX_OK;
-#if 0
 	u_char			c, ch, *p;
 	ngx_uint_t		hash, i;
 	enum {
-		sw_start = 0;
+		sw_start = 0,
         sw_name,
         sw_space_before_value,
         sw_value,
@@ -416,7 +413,7 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 					r->header_end = p;
 					goto done;
 				}
-
+#if 0
 				/* IIS may send the duplicate "HTTP/1.1 ..." lines */
 				if (ch == '/'
 						&& r->upstream
@@ -426,6 +423,7 @@ ngx_http_parse_header_line(ngx_http_request_t *r, ngx_buf_t *b,
 					state = sw_ignore_line;
 					break;
 				}
+#endif
 
 				if (ch == '\0') {
 					return NGX_HTTP_PARSE_INVALID_HEADER;
@@ -551,6 +549,4 @@ header_done:
 	r->state = sw_start;
 
 	return NGX_HTTP_PARSE_HEADER_DONE;
-#endif
 }
-

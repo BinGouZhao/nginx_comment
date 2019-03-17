@@ -69,4 +69,10 @@ u_char *ngx_snprintf(u_char *buf, size_t max, const char *fmt, ...);
 #define ngx_value_helper(n)   #n
 #define ngx_value(n)          ngx_value_helper(n)
 
+
+#define ngx_base64_encoded_length(len)  (((len + 2) / 3) * 4)
+#define ngx_base64_decoded_length(len)  (((len + 3) / 4) * 3)
+
+void ngx_encode_base64(ngx_str_t *dst, ngx_str_t *src);
+
 #endif /* _NGX_STRING_H_INCLUDED_ */

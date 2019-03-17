@@ -10,7 +10,10 @@ typedef struct ngx_http_request_s ngx_http_request_t;
 
 #include <ngx_http_request.h>
 
+void ngx_http_process_request(ngx_http_request_t *r);
+
 void ngx_http_empty_handler(ngx_event_t *wev);
+void ngx_websocket_handler(ngx_http_request_t *r);
 ngx_http_request_t *ngx_http_create_request(ngx_connection_t *c);
 
 void ngx_http_init_connection(ngx_connection_t *c);
