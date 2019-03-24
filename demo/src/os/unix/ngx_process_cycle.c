@@ -1,12 +1,18 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_event.h>
+#include <ngx_websocket.h>
 
 static void ngx_master_process_exit(ngx_cycle_t *cycle);
 static void ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n,
     ngx_int_t type);
 static void ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data);
 static void ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker);
+
+static void ngx_start_websocket_message_process(ngx_cycle_t *cycle, ngx_int_t type);
+static void ngx_websocket_message_process_cycle(ngx_cycle_t *cycle, void *data);
+static void ngx_websocket_message_process_init(ngx_cycle_t *cycle);
+static void ngx_process_websocket_messages(ngx_cycle_t *cycle);
 
 ngx_uint_t      ngx_process;
 ngx_uint_t      ngx_worker;
@@ -86,6 +92,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     ngx_setproctitle(title);
 
     ngx_start_worker_processes(cycle, NGX_PROCESS_NUM, NGX_PROCESS_RESPAWN);
+    ngx_start_websocket_message_process(cycle, NGX_PROCESS_RESPAWN);
 
     sigio = 0;
     //live = 1;
@@ -135,6 +142,15 @@ ngx_master_process_exit(ngx_cycle_t *cyle)
     exit(0);
 }
 
+static void
+ngx_start_websocket_message_process(ngx_cycle_t *cycle, ngx_int_t type)
+{
+    ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "start websocket message process");
+
+    ngx_spawn_process(cycle, ngx_websocket_message_process_cycle, NULL, "websocket message process", type); 
+
+}
+
 static void 
 ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
 {
@@ -158,6 +174,54 @@ ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
         */
         //ngx_pass_open_channel(cycle, &ch);
     }
+}
+
+static void
+ngx_websocket_message_process_cycle(ngx_cycle_t *cycle, void *data)
+{
+    ngx_process = NGX_PROCESS_WORKER;
+
+    ngx_websocket_message_process_init(cycle);
+
+    ngx_setproctitle("websocket message process");
+
+    for ( ;; ) {
+        if (ngx_exiting) {
+            exit(2);
+        }
+
+        ngx_process_websocket_messages(cycle);
+
+        if (ngx_terminate || ngx_quit) {
+            exit(2);
+        }
+    }
+}
+
+static void
+ngx_process_websocket_messages(ngx_cycle_t *cycle)
+{
+    static char                 buffer[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH + 2];
+    ngx_websocket_message_t     *m;
+
+    m = &ngx_messages[ngx_message_index];
+
+    m->message_id = ngx_message_id;
+    m->channel_id = 1;
+
+    sprintf(buffer, "hello: %d", (int) ngx_message_id);
+    m->message_length = ngx_websocket_frame_encode(m->message, (u_char *)buffer, NGX_WS_OPCODE_TEXT, 1);
+
+    ngx_message_id++;
+    ngx_message_index++;
+
+    if (ngx_message_index == NGX_WEBSOCKET_MESSAGE_N) {
+        ngx_message_index = 0;
+    }
+
+    sleep(1);
+
+    return;
 }
 
 static void 
@@ -184,6 +248,25 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
             exit(2);
         }
     }
+}
+
+static void
+ngx_websocket_message_process_init(ngx_cycle_t *cycle)
+{
+    sigset_t          set;
+    ngx_time_t        *tp;
+    
+    sigemptyset(&set);
+
+    if (sigprocmask(SIG_SETMASK, &set, NULL) == -1) {
+        ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
+                "sigprocmask() failed");
+    }
+
+    tp = ngx_timeofday();
+    srandom(((unsigned) ngx_pid << 16) ^ tp->sec ^ tp->msec);
+
+    return;
 }
 
 static void

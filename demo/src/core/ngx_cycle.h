@@ -8,6 +8,9 @@
 #define NGX_CYCLE_POOL_SIZE     NGX_DEFAULT_POOL_SIZE
 #endif
 
+#define NGX_WEBSOCKET_MESSAGE_N             1024
+#define NGX_WEBSOCKET_MAX_MESSAGE_LENGTH    256
+
 struct ngx_cycle_s {
     ngx_pool_t              *pool;
 
@@ -36,9 +39,26 @@ struct ngx_cycle_s {
     ngx_str_t               hostname;
 };
 
+struct ngx_websocket_message_s {
+    ngx_uint_t          message_id;
+    ngx_uint_t          channel_id;
+
+    time_t              start_sec;
+    ngx_msec_t          start_msec;
+
+    u_char              message[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH];
+    ngx_uint_t          message_length;
+
+    ngx_websocket_message_t *next;
+};
+
 ngx_cycle_t *ngx_init_cycle(ngx_cycle_t *old_cycle);
 ngx_int_t ngx_create_pidfile(ngx_str_t *name, ngx_log_t *log);
 
 extern volatile ngx_cycle_t  *ngx_cycle;
+
+extern ngx_websocket_message_t    *ngx_messages;
+extern volatile ngx_uint_t        ngx_message_index;
+extern volatile ngx_uint_t        ngx_message_id;
 
 #endif

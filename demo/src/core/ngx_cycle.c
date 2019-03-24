@@ -1,7 +1,13 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 
-volatile ngx_cycle_t  *ngx_cycle;
+volatile ngx_cycle_t       *ngx_cycle;
+volatile ngx_uint_t        ngx_message_index;
+volatile ngx_uint_t        ngx_message_id;
+ngx_websocket_message_t    *ngx_messages;
+
+static ngx_int_t ngx_create_shared_memory();
+
 
 ngx_cycle_t *
 ngx_init_cycle(ngx_cycle_t *old_cycle)
@@ -68,13 +74,17 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
         return NULL;
     }
 
+    if (ngx_create_shared_memory() != NGX_OK) {
+        return NULL;
+    }
+
     cycle->log = &cycle->new_log;
     pool->log = &cycle->new_log;
 
     struct sockaddr_in address;
     ngx_memzero(&address, sizeof(address));
     address.sin_family =AF_INET;
-    inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
+    inet_pton(AF_INET, "192.168.40.136", &address.sin_addr);
     address.sin_port = htons(40199);
 
     ngx_listening_t *ls = ngx_create_listening(cycle, (struct sockaddr *)&address, sizeof(address));
@@ -96,6 +106,37 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     cycle->connection_n = 1024;
 
     return cycle;
+}
+
+static ngx_int_t
+ngx_create_shared_memory() {
+    int                     fd, i;
+    ngx_websocket_message_t *m;
+
+    if ((fd = open("/dev/zero", O_RDWR)) == -1) {
+        return NGX_ERROR;
+    }
+
+    ngx_messages = mmap(NULL, sizeof(ngx_websocket_message_t) * NGX_WEBSOCKET_MESSAGE_N,
+                        PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    if (ngx_messages == MAP_FAILED) {
+        return NGX_ERROR;
+    }
+
+    i = NGX_WEBSOCKET_MESSAGE_N;
+    m = ngx_messages;
+
+    do {
+        i--;
+        ngx_messages[i].next = m; 
+
+        m = &ngx_messages[i];
+    } while(i);
+
+    ngx_message_index = 0;
+    ngx_message_id = 1;
+    
+    return NGX_OK;
 }
 
 ngx_int_t

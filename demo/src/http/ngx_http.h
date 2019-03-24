@@ -9,6 +9,7 @@
 typedef struct ngx_http_request_s ngx_http_request_t;
 
 #include <ngx_http_request.h>
+#include <ngx_websocket.h>
 
 void ngx_http_process_request(ngx_http_request_t *r);
 

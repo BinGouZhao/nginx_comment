@@ -580,7 +580,7 @@ ngx_websocket_handler(ngx_http_request_t *r)
                                       "Upgrade: websocket\r\n"				    \
                                       "Connection: Upgrade\r\n"				    \
                                       "Sec-WebSocket-Accept: %s\r\n"			\
-                                      "Sec-WebSocket-Version: 13";               
+                                      "Sec-WebSocket-Version: 13\r\n\r\n";               
 
     if (!r->upgrade || r->sec_websocket_key == NULL) {
         ngx_http_finalize_request(r, NGX_HTTP_BAD_REQUEST);
@@ -849,6 +849,8 @@ ngx_websocket_writer(ngx_http_request_t *r)
 
     if (n >= send) {
         ngx_http_close_request(r, rc);
+
+        ngx_websocket_send(c);
         return;
 
     } else {

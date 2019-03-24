@@ -45,6 +45,7 @@ CORE_INCS = -I src/core \
 	-I src/os/unix 
 
 HTTP_DEPS = src/http/ngx_http.h \
+			src/http/ngx_websocket.h \
 			src/http/ngx_http_request.h
 
 HTTP_INCS = -I src/http 
@@ -81,6 +82,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/event/ngx_epoll.o \
 	objs/src/http/ngx_http_request.o \
 	objs/src/http/ngx_http_parse.o \
+	objs/src/http/ngx_websocket.o \
 	objs/src/os/unix/ngx_send.o \
 	objs/src/os/unix/ngx_recv.o \
 	objs/src/core/ngx_list.o \
@@ -119,6 +121,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_rbtree.o \
 	objs/src/http/ngx_http_request.o \
 	objs/src/http/ngx_http_parse.o \
+	objs/src/http/ngx_websocket.o \
 	objs/src/os/unix/ngx_send.o \
 	objs/src/os/unix/ngx_recv.o \
 	objs/src/core/ngx_list.o \
@@ -319,6 +322,14 @@ objs/src/http/ngx_http_parse.o:	$(CORE_DEPS) $(HTTP_DEPS) \
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
 		-o objs/src/http/ngx_http_parse.o \
 		src/http/ngx_http_parse.c
+
+objs/src/http/ngx_websocket.o:	$(CORE_DEPS) $(HTTP_DEPS) \
+	src/http/ngx_websocket.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
+		-o objs/src/http/ngx_websocket.o \
+		src/http/ngx_websocket.c
+
+
 
 
 objs/src/core/ngx_list.o:	$(CORE_DEPS) \
