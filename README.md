@@ -52,3 +52,7 @@ http 请求行及头部解析, 切换websocket
 
 hash table
 
+#### 2019年3月26日
+
+epoll + websocket 模拟简易弹幕服务
+

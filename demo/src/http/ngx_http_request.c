@@ -125,6 +125,7 @@ ngx_http_wait_request_handler(ngx_event_t *rev)
 	}
 
 	n = c->recv(c, b->last, NGX_CLIENT_HEADER_BUFFER_SIZE);
+    ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0, "recv: %s", b->last);
 
 	if (n == NGX_AGAIN) {
 
@@ -519,7 +520,7 @@ void
 ngx_http_finalize_request(ngx_http_request_t *r, ngx_int_t rc) 
 {
     ngx_connection_t    *c;
-    static char         *response = "HTTP/1.1 403 Forbidden\r\n";
+    static char         *response = "HTTP/1.1 403 Forbidden\r\n\r\n";
 
     c = r->connection;
 
@@ -850,7 +851,9 @@ ngx_websocket_writer(ngx_http_request_t *r)
     if (n >= send) {
         ngx_http_close_request(r, rc);
 
-		ngx_websocket_init_connection(c, 1);
+        if (rc == NGX_OK) {
+		    ngx_websocket_init_connection(c, 1);
+        }
         return;
 
     } else {

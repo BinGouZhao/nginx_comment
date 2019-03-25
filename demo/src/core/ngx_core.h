@@ -45,7 +45,6 @@ typedef void (*ngx_connection_handler_pt)(ngx_connection_t *c);
 #include <ngx_conf_file.h>
 #include <ngx_cycle.h>
 #include <ngx_times.h>
-#include <ngx_channel.h>
 #include <ngx_os.h>
 #include <ngx_connection.h>
 #include <ngx_process_cycle.h>

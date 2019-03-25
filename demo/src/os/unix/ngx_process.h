@@ -26,6 +26,7 @@ typedef struct {
     unsigned            detached:1;
     unsigned            exiting:1;
     unsigned            exited:1;
+    unsigned            message:1;
 } ngx_process_t;
 
 #define NGX_MAX_PROCESSES         10

@@ -1,6 +1,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_event.h>
+#include <ngx_channel.h>
 #include <ngx_websocket.h>
 
 static void ngx_master_process_exit(ngx_cycle_t *cycle);
@@ -13,6 +14,10 @@ static void ngx_start_websocket_message_process(ngx_cycle_t *cycle, ngx_int_t ty
 static void ngx_websocket_message_process_cycle(ngx_cycle_t *cycle, void *data);
 static void ngx_websocket_message_process_init(ngx_cycle_t *cycle);
 static void ngx_process_websocket_messages(ngx_cycle_t *cycle);
+static void ngx_channel_handler(ngx_event_t *ev);
+static void ngx_signal_worker_processes(ngx_cycle_t *cycle, int signo);
+static void ngx_pass_open_channel(ngx_cycle_t *cycle, ngx_channel_t *ch);
+static void ngx_websocket_new_message(ngx_cycle_t *cycle);
 
 ngx_uint_t      ngx_process;
 ngx_uint_t      ngx_worker;
@@ -50,7 +55,8 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     u_char            *p;
     size_t             size;
     ngx_int_t          i;
-    ngx_uint_t         live, sigio;
+    ngx_uint_t         n, live, sigio;
+    ngx_listening_t   *ls;
     sigset_t           set;
 
     sigemptyset(&set);
@@ -92,7 +98,7 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
     ngx_setproctitle(title);
 
     ngx_start_worker_processes(cycle, NGX_PROCESS_NUM, NGX_PROCESS_RESPAWN);
-    ngx_start_websocket_message_process(cycle, NGX_PROCESS_RESPAWN);
+    ngx_start_websocket_message_process(cycle, NGX_PROCESS_DETACHED);
 
     sigio = 0;
     //live = 1;
@@ -107,10 +113,6 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
         ngx_log_debug1(NGX_LOG_DEBUG_EVENT, cycle->log, 0, 
                        "wake up, sigio %i", sigio);
 
-        if (!live && (ngx_terminate || ngx_quit)) {
-            ngx_master_process_exit(cycle);
-        }
-#if 0
         if (ngx_terminate) {
             ngx_signal_worker_processes(cycle, 
                                         ngx_signal_value(NGX_TERMINATE_SIGNAL));
@@ -132,7 +134,10 @@ ngx_master_process_cycle(ngx_cycle_t *cycle)
 
             continue;
         }
-#endif
+
+        if (!live && (ngx_terminate || ngx_quit)) {
+            ngx_master_process_exit(cycle);
+        }
     }
 }
 
@@ -155,24 +160,50 @@ static void
 ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n, ngx_int_t type)
 {
     ngx_int_t           i;
-    //ngx_channel_t       ch;
+    ngx_channel_t       ch;
 
     ngx_log_error(NGX_LOG_NOTICE, cycle->log, 0, "start worker processes");
 
-    //ngx_memzero(&ch, sizeof(ngx_channel_t));
+    ngx_memzero(&ch, sizeof(ngx_channel_t));
 
-    //ch.command = NGX_CMD_OPEN_CHANNEL;
+    ch.command = NGX_CMD_OPEN_CHANNEL;
 
     for (i = 0; i < n; i++) {
         ngx_spawn_process(cycle, ngx_worker_process_cycle,
                           (void *) (intptr_t) i, "worker process", type);
 
-        /*
-        ch.pid = ngx_process[ngx_process_slot].pid;
+        ch.pid = ngx_processes[ngx_process_slot].pid;
         ch.slot = ngx_process_slot;
         ch.fd = ngx_processes[ngx_process_slot].channel[0];
-        */
-        //ngx_pass_open_channel(cycle, &ch);
+
+        ngx_pass_open_channel(cycle, &ch);
+    }
+}
+
+static void
+ngx_pass_open_channel(ngx_cycle_t *cycle, ngx_channel_t *ch)
+{
+    ngx_int_t  i;
+
+    for (i = 0; i < ngx_last_process; i++) {
+
+        if (i == ngx_process_slot
+            || ngx_processes[i].pid == -1
+            || ngx_processes[i].channel[0] == -1)
+        {
+            continue;
+        }
+
+        ngx_log_debug6(NGX_LOG_DEBUG_CORE, cycle->log, 0,
+                      "pass channel s:%i pid:%P fd:%d to s:%i pid:%P fd:%d",
+                      ch->slot, ch->pid, ch->fd,
+                      i, ngx_processes[i].pid,
+                      ngx_processes[i].channel[0]);
+
+        /* TODO: NGX_AGAIN */
+
+        ngx_write_channel(ngx_processes[i].channel[0],
+                          ch, sizeof(ngx_channel_t), cycle->log);
     }
 }
 
@@ -219,6 +250,7 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
         ngx_message_index = 0;
     }
 
+    ngx_websocket_new_message(cycle);
     sleep(10);
 
     return;
@@ -253,8 +285,8 @@ ngx_worker_process_cycle(ngx_cycle_t *cycle, void *data)
 static void
 ngx_websocket_message_process_init(ngx_cycle_t *cycle)
 {
-    sigset_t          set;
-    ngx_time_t        *tp;
+    sigset_t            set;
+    ngx_time_t          *tp;
     
     sigemptyset(&set);
 
@@ -265,8 +297,97 @@ ngx_websocket_message_process_init(ngx_cycle_t *cycle)
 
     tp = ngx_timeofday();
     srandom(((unsigned) ngx_pid << 16) ^ tp->sec ^ tp->msec);
+}
 
-    return;
+static void
+ngx_channel_handler(ngx_event_t *ev)
+{
+    ngx_int_t          n;
+    ngx_channel_t      ch;
+    ngx_connection_t  *c;
+
+    if (ev->timedout) {
+        ev->timedout = 0;
+        return;
+    }
+
+    c = ev->data;
+
+    ngx_log_debug0(NGX_LOG_DEBUG_CORE, ev->log, 0, "channel handler");
+
+    for ( ;; ) {
+
+        n = ngx_read_channel(c->fd, &ch, sizeof(ngx_channel_t), ev->log);
+
+        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ev->log, 0, "channel: %i", n);
+
+        if (n == NGX_ERROR) {
+
+            if (ngx_event_flags & NGX_USE_EPOLL_EVENT) {
+                ngx_del_conn(c, 0);
+            }
+
+            ngx_close_connection(c);
+            return;
+        }
+
+        if (ngx_event_flags & NGX_USE_EVENTPORT_EVENT) {
+            if (ngx_add_event(ev, NGX_READ_EVENT, 0) == NGX_ERROR) {
+                return;
+            }
+        }
+
+        if (n == NGX_AGAIN) {
+            return;
+        }
+
+        ngx_log_debug1(NGX_LOG_DEBUG_CORE, ev->log, 0,
+                       "channel command: %ui", ch.command);
+
+        switch (ch.command) {
+
+        case NGX_CMD_QUIT:
+            ngx_quit = 1;
+            break;
+
+        case NGX_CMD_TERMINATE:
+            ngx_terminate = 1;
+            break;
+
+        case NGX_CMD_REOPEN:
+            ngx_reopen = 1;
+            break;
+
+        case NGX_CMD_OPEN_CHANNEL:
+
+            ngx_log_debug3(NGX_LOG_DEBUG_CORE, ev->log, 0,
+                           "get channel s:%i pid:%P fd:%d",
+                           ch.slot, ch.pid, ch.fd);
+
+            ngx_processes[ch.slot].pid = ch.pid;
+            ngx_processes[ch.slot].channel[0] = ch.fd;
+            break;
+
+        case NGX_CMD_CLOSE_CHANNEL:
+
+            ngx_log_debug4(NGX_LOG_DEBUG_CORE, ev->log, 0,
+                           "close channel s:%i pid:%P our:%P fd:%d",
+                           ch.slot, ch.pid, ngx_processes[ch.slot].pid,
+                           ngx_processes[ch.slot].channel[0]);
+
+            if (close(ngx_processes[ch.slot].channel[0]) == -1) {
+                ngx_log_error(NGX_LOG_ALERT, ev->log, ngx_errno,
+                              "close() channel failed");
+            }
+
+            ngx_processes[ch.slot].channel[0] = -1;
+            break;
+
+        case NGX_CMD_NEW_MESSAGE:
+            ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, 0, "channel recv new message");
+            break;
+        }
+    }
 }
 
 static void
@@ -312,13 +433,175 @@ ngx_worker_process_init(ngx_cycle_t *cycle, ngx_int_t worker)
         ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
                       "close() channel failed");
     }
-}
-/*
 
-static void 
+    if (ngx_add_channel_event(cycle, ngx_channel, NGX_READ_EVENT,
+                ngx_channel_handler)
+            == NGX_ERROR)
+    {
+        /* fatal */
+        exit(2);
+    }
+}
+
+static void
+ngx_websocket_new_message(ngx_cycle_t *cycle)
+{
+    ngx_int_t      i;
+    ngx_channel_t  ch;
+
+    ngx_memzero(&ch, sizeof(ngx_channel_t));
+
+    ch.command = NGX_CMD_NEW_MESSAGE;
+    ch.fd = -1;
+
+    for (i = 0; i < ngx_last_process; i++) {
+
+        ngx_log_debug7(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                       "child: %i %P e:%d t:%d d:%d r:%d j:%d",
+                       i,
+                       ngx_processes[i].pid,
+                       ngx_processes[i].exiting,
+                       ngx_processes[i].exited,
+                       ngx_processes[i].detached,
+                       ngx_processes[i].respawn,
+                       ngx_processes[i].just_spawn);
+
+        if (ngx_processes[i].detached || ngx_processes[i].pid == -1) {
+            continue;
+        }
+
+        if (ngx_processes[i].just_spawn) {
+            ngx_processes[i].just_spawn = 0;
+            continue;
+        }
+
+        if (ngx_processes[i].exiting) {
+            continue;
+        }
+
+        if (ch.command) {
+            if (ngx_write_channel(ngx_processes[i].channel[0],
+                                  &ch, sizeof(ngx_channel_t), cycle->log)
+                == NGX_OK)
+            {
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, 0, 
+                              "websocket message process send channel(new message) success.");
+                continue;
+            } else {
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno, 
+                        "websocket message process send channel(new message) failed.");
+                continue;
+            }
+        }
+    }
+}
+
+static void
 ngx_signal_worker_processes(ngx_cycle_t *cycle, int signo)
 {
-    ngx_int_t       i;
-    ngx_err_t       err;
-    ngx_channel_t   ch;
-*/
+    ngx_int_t      i;
+    ngx_err_t      err;
+    ngx_channel_t  ch;
+
+    ngx_memzero(&ch, sizeof(ngx_channel_t));
+
+    switch (signo) {
+
+    case ngx_signal_value(NGX_SHUTDOWN_SIGNAL):
+        ch.command = NGX_CMD_QUIT;
+        break;
+
+    case ngx_signal_value(NGX_TERMINATE_SIGNAL):
+        ch.command = NGX_CMD_TERMINATE;
+        break;
+
+    case ngx_signal_value(NGX_REOPEN_SIGNAL):
+        ch.command = NGX_CMD_REOPEN;
+        break;
+
+    default:
+        ch.command = 0;
+    }
+
+    ch.fd = -1;
+
+    for (i = 0; i < ngx_last_process; i++) {
+
+        ngx_log_debug7(NGX_LOG_DEBUG_EVENT, cycle->log, 0,
+                       "child: %i %P e:%d t:%d d:%d r:%d j:%d",
+                       i,
+                       ngx_processes[i].pid,
+                       ngx_processes[i].exiting,
+                       ngx_processes[i].exited,
+                       ngx_processes[i].detached,
+                       ngx_processes[i].respawn,
+                       ngx_processes[i].just_spawn);
+
+        if (ngx_processes[i].message && ngx_processes[i].pid != -1) {
+            if (kill(ngx_processes[i].pid, signo) == -1) {
+                err = ngx_errno;
+                ngx_log_error(NGX_LOG_ALERT, cycle->log, err,
+                        "kill(%P, %d) failed", ngx_processes[i].pid, signo);
+
+                if (err == NGX_ESRCH) {
+                    ngx_processes[i].exited = 1;
+                    ngx_processes[i].exiting = 0;
+                    ngx_reap = 1;
+                }
+
+                continue;
+            }
+
+            continue;
+        }
+
+        if (ngx_processes[i].detached || ngx_processes[i].pid == -1) {
+            continue;
+        }
+
+        if (ngx_processes[i].just_spawn) {
+            ngx_processes[i].just_spawn = 0;
+            continue;
+        }
+
+        if (ngx_processes[i].exiting
+            && signo == ngx_signal_value(NGX_SHUTDOWN_SIGNAL))
+        {
+            continue;
+        }
+
+        if (ch.command) {
+            if (ngx_write_channel(ngx_processes[i].channel[0],
+                                  &ch, sizeof(ngx_channel_t), cycle->log)
+                == NGX_OK)
+            {
+                if (signo != ngx_signal_value(NGX_REOPEN_SIGNAL)) {
+                    ngx_processes[i].exiting = 1;
+                }
+
+                continue;
+            }
+        }
+
+        ngx_log_debug2(NGX_LOG_DEBUG_CORE, cycle->log, 0,
+                       "kill (%P, %d)", ngx_processes[i].pid, signo);
+
+        if (kill(ngx_processes[i].pid, signo) == -1) {
+            err = ngx_errno;
+            ngx_log_error(NGX_LOG_ALERT, cycle->log, err,
+                          "kill(%P, %d) failed", ngx_processes[i].pid, signo);
+
+            if (err == NGX_ESRCH) {
+                ngx_processes[i].exited = 1;
+                ngx_processes[i].exiting = 0;
+                ngx_reap = 1;
+            }
+
+            continue;
+        }
+
+        if (signo != ngx_signal_value(NGX_REOPEN_SIGNAL)) {
+            ngx_processes[i].exiting = 1;
+        }
+    }
+}

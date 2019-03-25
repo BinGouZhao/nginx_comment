@@ -13,6 +13,8 @@
 #define NGX_USE_EPOLL_EVENT      0x00000040
 #define NGX_USE_GREEDY_EVENT     0x00000020
 
+#define NGX_USE_EVENTPORT_EVENT  0x00001000
+
 #define NGX_INVALID_INDEX  0xd0d0d0d0
 
 #define NGX_UPDATE_TIME         1
@@ -43,6 +45,8 @@ struct ngx_event_s {
     unsigned        available:1;
     unsigned        timer_set:1;
 
+    unsigned         channel:1;
+
     unsigned         cancelable:1;
 
     ngx_log_t       *log;
@@ -58,6 +62,7 @@ struct ngx_event_s {
 #define ngx_add_event   ngx_epoll_add_event
 #define ngx_del_event   ngx_epoll_del_event
 #define ngx_del_conn    ngx_epoll_del_connection
+#define ngx_add_conn    ngx_epoll_add_connection
 
 #define ngx_del_timer        ngx_event_del_timer
 
@@ -70,6 +75,7 @@ ngx_int_t ngx_epoll_add_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags
 ngx_int_t ngx_epoll_del_event(ngx_event_t *ev, ngx_int_t event, ngx_uint_t flags);
 ngx_int_t ngx_epoll_process_events(ngx_cycle_t *cycle, ngx_msec_t timer, ngx_uint_t flags);
 ngx_int_t ngx_epoll_del_connection(ngx_connection_t *c, ngx_uint_t flags);
+ngx_int_t ngx_epoll_add_connection(ngx_connection_t *c);
 
 void ngx_event_accept(ngx_event_t *ev);
 void ngx_process_events_and_timers(ngx_cycle_t *cycle);

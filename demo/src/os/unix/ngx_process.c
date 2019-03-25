@@ -1,5 +1,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_event.h>
+#include <ngx_channel.h>
 
 typedef struct {
     int         signo;
@@ -162,6 +164,7 @@ ngx_spawn_process(ngx_cycle_t *cycle, ngx_spawn_proc_pt proc, void *data,
     } else {
         ngx_processes[s].channel[0] = -1;
         ngx_processes[s].channel[1] = -1;
+        ngx_processes[s].message = 1;
     }
 
     ngx_process_slot = s;

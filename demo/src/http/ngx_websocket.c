@@ -10,6 +10,8 @@ ngx_uint_t ngx_websocket_channel_hash_func(ngx_uint_t key);
 int ngx_websocket_channel_equal_func(ngx_uint_t k1, ngx_uint_t k2);
 static void ngx_websocket_send_message_handler(ngx_event_t *wev);
 static void ngx_websocket_message_handler(ngx_websocket_connection_t *wc);
+void ngx_websocket_close_connection(ngx_websocket_connection_t *wc);
+
 
 volatile ngx_uint_t         ngx_websocket_message_id_sent;
 ngx_websocket_message_t     *ngx_websocket_message_send;
@@ -47,14 +49,23 @@ ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id)
 {
     ngx_queue_t                 *channel_queue;
     ngx_websocket_connection_t  *wc;
+    ngx_pool_t                  *pool;
 
-    wc = ngx_pcalloc(c->pool, sizeof(ngx_websocket_connection_t));
-    if (wc == NULL) {
-        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "malloc (websocket init) failed.");
+    pool = ngx_create_pool(512, c->log); 
+    if (pool == NULL) {
         ngx_http_close_connection(c);
         return;
     }
 
+    wc = ngx_pcalloc(pool, sizeof(ngx_websocket_connection_t));
+    if (wc == NULL) {
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "malloc (websocket init) failed.");
+        ngx_destroy_pool(pool);
+        ngx_http_close_connection(c);
+        return;
+    }
+
+    wc->pool = pool;
     wc->channel_id = channel_id;
     wc->state = NGX_WS_CONNECTION_WRITE_STATE;
     wc->data = c;
@@ -183,7 +194,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
 	    ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT,
 	                  "client timed out");
 	    c->timedout = 1;
-	    ngx_http_close_connection(c);
+	    ngx_websocket_close_connection(wc);
 	    return;
 	}
 
@@ -204,7 +215,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
         }
 
         if (ngx_handle_write_event(wev, 0) != NGX_OK) {
-            ngx_http_close_connection(c);
+            ngx_websocket_close_connection(wc);
             return;
         }
 
@@ -212,14 +223,14 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
     }
 
     if (n == NGX_ERROR) {
-        ngx_http_close_connection(c);
+        ngx_websocket_close_connection(wc);
         return;
     }
 
     if (n == 0) {
         ngx_log_error(NGX_LOG_INFO, c->log, ngx_errno,
                 "client closed connection");
-        ngx_http_close_connection(c);
+        ngx_websocket_close_connection(wc);
         return;
     }
 
@@ -230,7 +241,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
         }
 
         if (ngx_handle_write_event(wev, 0) != NGX_OK) {
-            ngx_http_close_connection(c);
+            ngx_websocket_close_connection(wc);
             return;
         }
     }
@@ -371,6 +382,19 @@ ngx_websocket_process_messages(ngx_cycle_t *cycle)
     }   
 }
 
+void
+ngx_websocket_close_connection(ngx_websocket_connection_t *wc)
+{
+    ngx_connection_t        *c;
+
+    c = wc->data;
+    
+    ngx_queue_remove(&wc->queue);
+
+    ngx_destroy_pool(wc->pool);
+    ngx_http_close_connection(c);
+}
+
 static void 
 ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
 {
@@ -386,7 +410,7 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
         ngx_log_error(NGX_LOG_INFO, c->log, NGX_ETIMEDOUT,
                       "client timed out");
         c->timedout = 1;
-        ngx_http_close_connection(c);
+        ngx_websocket_close_connection(wc);
         return;
     }
 
@@ -407,7 +431,7 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
         }
 
         if (ngx_handle_write_event(wev, 0) != NGX_OK) {
-            ngx_http_close_connection(c);
+            ngx_websocket_close_connection(wc);
             return;
         }
 
@@ -415,14 +439,14 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
     }
 
     if (n == NGX_ERROR) {
-        ngx_http_close_connection(c);
+        ngx_websocket_close_connection(wc);
         return;
     }
 
     if (n == 0) {
         ngx_log_error(NGX_LOG_INFO, c->log, ngx_errno,
                 "client closed connection");
-        ngx_http_close_connection(c);
+        ngx_websocket_close_connection(wc);
         return;
     }
 
@@ -433,7 +457,7 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
         }
 
         if (ngx_handle_write_event(wev, 0) != NGX_OK) {
-            ngx_http_close_connection(c);
+            ngx_websocket_close_connection(wc);
             return;
         }
     }
