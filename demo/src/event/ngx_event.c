@@ -57,6 +57,8 @@ ngx_process_events_and_timers(ngx_cycle_t *cycle)
 	}
 
 	ngx_event_process_posted(cycle, &ngx_posted_events);
+
+	ngx_websocket_process_messages(cycle);
 }
 
 ngx_int_t	

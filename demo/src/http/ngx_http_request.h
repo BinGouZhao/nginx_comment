@@ -81,8 +81,6 @@
 #define NGX_HTTP_INSUFFICIENT_STORAGE      507
 
 
-
-
 #define NGX_WS_VERSION			13
 
 #define NGX_WS_MASK_KEY_LENGTH	4
@@ -130,17 +128,7 @@ typedef enum {
     NGX_HTTP_KEEPALIVE_STATE
 } ngx_http_state_e;
 
-typedef enum {
-	NGX_WS_INITING_REQUEST_STATE = 0,
-	NGX_WS_READING_REQUEST_STATE,
-	NGX_WS_PROCESS_REQUEST_STATE,
-	
-	NGX_WS_KEEPALIVE_CONNECTION_STATE,
-	NGX_WS_READ_CONNECTION_STATE,
-	NGX_WS_WRITE_CONNECTION_STATE,
-	NGX_WS_HANDSHAKE_CONNECTION_STATE,
-	NGX_WS_CLOSING_CONNECTION_STATE,
-} ngx_ws_state_e;
+
 
 struct ngx_ws_frame_s {
 	unsigned			fin:1;
@@ -159,13 +147,6 @@ struct ngx_ws_frame_s {
 	ngx_buf_t			*buf;
 };
 
-struct ngx_ws_connection_s {
-	ngx_connection_t		*connection;
-
-	ngx_pool_t				*pool;
-
-	ngx_buf_t				*header_in;
-};
 
 typedef struct {
     int         state;

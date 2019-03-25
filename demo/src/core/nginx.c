@@ -4,6 +4,7 @@
 
 
 #if 0
+
 static void ngx_show_version_info(void);
 static ngx_int_t ngx_get_options(int argc, char *const *argv);
 static ngx_int_t ngx_save_argv(ngx_cycle_t *cycle, int argc, char *const *argv);

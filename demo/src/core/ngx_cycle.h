@@ -47,7 +47,7 @@ struct ngx_websocket_message_s {
     ngx_msec_t          start_msec;
 
     u_char              message[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH];
-    ngx_uint_t          message_length;
+    size_t              message_length;
 
     ngx_websocket_message_t *next;
 };

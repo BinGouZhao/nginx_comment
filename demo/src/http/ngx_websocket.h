@@ -9,6 +9,13 @@
 #define WEBSOCKET_FRAME_SET_MASK(BYTE) (((BYTE) & 0x01) << 7)
 #define WEBSOCKET_FRAME_SET_LENGTH(X64, IDX) (unsigned char)(((X64) >> ((IDX)*8)) & 0xFF)
 
+typedef enum {  
+    NGX_WS_CONNECTION_WRITE_STATE = 0,
+    NGX_WS_CONNECTION_READ_STATE,
+    NGX_WS_CONNECTION_PING_STATE,
+    NGX_WS_CONNECTION_PONG_STATE,
+    NGX_WS_CONNECTION_CLOSING_STATE,
+} ngx_ws_state_e;
 
 typedef struct ngx_websocket_frame_s ngx_websocket_frame_t;
 
@@ -24,13 +31,17 @@ struct ngx_websocket_frame_s {
 };
 
 struct ngx_websocket_connection_s {
+    void                    *data;
     ngx_int_t               state;
     ngx_queue_t             queue;
 
     ngx_pool_t              *pool;
 
     u_char                  buffer[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH];
-    ngx_uint_t              sent; 
+    size_t                  message_size; 
+
+    ngx_uint_t              channel_id;
+    ngx_uint_t              message_id;
 };
 
 struct ngx_websocket_channel_s {
@@ -45,7 +56,9 @@ struct ngx_websocket_channel_s {
     ngx_log_t       *log;
 };
 
-void ngx_websocket_send(ngx_connection_t *c);
+
+ngx_int_t ngx_websocket_init();
+void ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id);
 ngx_uint_t ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish);
 
 #endif
