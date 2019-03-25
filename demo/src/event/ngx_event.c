@@ -88,6 +88,10 @@ ngx_event_process_init(ngx_cycle_t *cycle)
         exit(2);
     }
 
+	if (ngx_websocket_init() != NGX_OK) {
+		exit(2);
+	}
+
 	cycle->connections = 
 		ngx_alloc(sizeof(ngx_connection_t) * cycle->connection_n, cycle->log);
 	if (cycle->connections == NULL) {

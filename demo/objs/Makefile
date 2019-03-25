@@ -127,7 +127,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_list.o \
 	objs/src/core/ngx_hash.o \
 	objs/src/core/ngx_sha1.o \
-	-ldl -lpthread -lcrypt -lpcre -lz \
+	-ldl -lpthread -lcrypt -lpcre -lz -lrt \
 	-Wl,-E
 	
 modules:

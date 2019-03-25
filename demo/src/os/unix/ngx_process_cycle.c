@@ -219,7 +219,7 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
         ngx_message_index = 0;
     }
 
-    sleep(1);
+    sleep(10);
 
     return;
 }

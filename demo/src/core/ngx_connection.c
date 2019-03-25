@@ -89,7 +89,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
                 return NGX_ERROR;
             }
-
+#if 0
             int reuseport = 1;
             if (setsockopt(s, SOL_SOCKET, SO_REUSEPORT,
                         (const void *)&reuseport, sizeof(int))
@@ -107,7 +107,7 @@ ngx_open_listening_sockets(ngx_cycle_t *cycle)
 
                 return NGX_ERROR;
             }
-
+#endif
             // 非阻塞
             if (ngx_nonblocking(s) == -1) {
                 ngx_log_error(NGX_LOG_EMERG, log, ngx_socket_errno,

@@ -850,7 +850,7 @@ ngx_websocket_writer(ngx_http_request_t *r)
     if (n >= send) {
         ngx_http_close_request(r, rc);
 
-        ngx_websocket_send(c);
+		ngx_websocket_init_connection(c, 1);
         return;
 
     } else {

@@ -4,20 +4,24 @@
 
 
 //static ngx_int_t ngx_websocket_frame_encode(ngx_buf_t *b, ngx_buf_t *message, char opcode, uint8_t finish); 
-static void ngx_websocket_frame_handler(ngx_event_t *wev);
-static void ngx_uint_t ngx_websocket_channel_hash_func(ngx_uint_t key);
+//static void ngx_websocket_frame_handler(ngx_event_t *wev);
+static void ngx_websocket_wait_frame_handler(ngx_event_t *rev);
+ngx_uint_t ngx_websocket_channel_hash_func(ngx_uint_t key);
+int ngx_websocket_channel_equal_func(ngx_uint_t k1, ngx_uint_t k2);
+static void ngx_websocket_send_message_handler(ngx_event_t *wev);
+static void ngx_websocket_message_handler(ngx_websocket_connection_t *wc);
 
 volatile ngx_uint_t         ngx_websocket_message_id_sent;
 ngx_websocket_message_t     *ngx_websocket_message_send;
 
 ngx_hash_table_t            *ngx_websocket_hash_table;
 
-static ngx_uint_t
+ngx_uint_t
 ngx_websocket_channel_hash_func(ngx_uint_t key) {
     return key;
 }
 
-static int
+int
 ngx_websocket_channel_equal_func(ngx_uint_t k1, ngx_uint_t k2)
 {
     return k1 == k2;
@@ -26,11 +30,14 @@ ngx_websocket_channel_equal_func(ngx_uint_t k1, ngx_uint_t k2)
 
 ngx_int_t
 ngx_websocket_init() {
-    ngx_websocket_hash_table = ngx_hash_tabel_new(ngx_websocket_channel_hash_func,
+    ngx_websocket_hash_table = ngx_hash_table_new(ngx_websocket_channel_hash_func,
                                                   ngx_websocket_channel_equal_func);
     if (ngx_websocket_hash_table == NULL) {
         return NGX_ERROR;
     }
+
+	ngx_websocket_message_send = &ngx_messages[0];
+	ngx_websocket_message_id_sent = 0;
 
     return NGX_OK;
 }
@@ -62,7 +69,7 @@ ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id)
             return;
         }
 
-        ngx_queue_init(&channel_queue);
+        ngx_queue_init(channel_queue);
 
         if (ngx_hash_table_insert(ngx_websocket_hash_table, channel_id, channel_queue) == 0) {
             ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "hash insert (websocket init) failed.");
@@ -71,7 +78,7 @@ ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id)
         }
     }
 
-    ngx_queue_insert_tail(&channel_queue, &wc->queue);
+    ngx_queue_insert_tail(channel_queue, &wc->queue);
 
     c->read->handler = ngx_websocket_wait_frame_handler;
     c->write->handler = ngx_websocket_send_message_handler;
@@ -83,7 +90,7 @@ ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id)
     return;
 } 
 
-void 
+static void 
 ngx_websocket_wait_frame_handler(ngx_event_t *rev)
 {
     return;
@@ -160,7 +167,7 @@ ngx_websocket_process_frame(ngx_event_t *rev)
 }
 #endif
 
-void 
+static void 
 ngx_websocket_send_message_handler(ngx_event_t *wev)
 {
 	size_t              		size;
@@ -169,7 +176,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
     ngx_websocket_connection_t 	*wc;
 
 
-    c = web->data;
+    c = wev->data;
     wc = c->data;
     
 	if (wev->timedout) {
@@ -180,7 +187,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
 	    return;
 	}
 
-	size = c->message_size;
+	size = wc->message_size;
 
 	if (size == 0) {
 		return;
@@ -332,7 +339,7 @@ void
 ngx_websocket_process_messages(ngx_cycle_t *cycle)
 {
     ngx_uint_t                  channel_id;
-    ngx_queue_t                 *channel_queue, next;
+    ngx_queue_t                 *channel_queue, *next;
     ngx_websocket_connection_t  *wc;
 
 
@@ -342,15 +349,18 @@ ngx_websocket_process_messages(ngx_cycle_t *cycle)
 
         channel_queue = ngx_hash_table_lookup(ngx_websocket_hash_table, channel_id);
         if (channel_queue == ngx_hash_table_null) {
-            continue;
-        }
-        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "process websocket message %d", (int) channel_id);
+			ngx_websocket_message_id_sent = ngx_websocket_message_send->message_id;
+			ngx_websocket_message_send = ngx_websocket_message_send->next;
+
+			continue;
+		}
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "process websocket message %d", (int) ngx_websocket_message_send->message_id);
 
         next = channel_queue->next;
         while (next != channel_queue) {
             wc = ngx_queue_data(next, ngx_websocket_connection_t, queue);
 
-            ngx_websocket_message_handler(ngx_websocket_connection_t *wc);
+            ngx_websocket_message_handler(wc);
 
             next = next->next;
         }
@@ -361,9 +371,11 @@ ngx_websocket_process_messages(ngx_cycle_t *cycle)
     }   
 }
 
-void 
+static void 
 ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
 {
+	size_t					size;
+	ssize_t					n;
     ngx_connection_t        *c;
     ngx_event_t             *wev;
 
@@ -385,7 +397,7 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
     }
 
     n = c->send(c, ngx_websocket_message_send->message, size);
-    ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "websocket send(message handler) %d", n);
+    ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "websocket send(message handler) :%d bytes", n);
 
     if (n == NGX_AGAIN) {
 

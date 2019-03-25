@@ -178,6 +178,8 @@ ngx_hash_table_lookup(ngx_hash_table_t *hash_table, ngx_hash_table_key key)
     return ngx_hash_table_null;
 }
 
+#if 0
+
 ngx_uint_t
 ngx_int_hash_func(ngx_uint_t value)
 {
@@ -219,7 +221,6 @@ int main() {
     return 0;
 }
 
-#if 0
 int 
 ngx_hash_table_remove(ngx_hash_table_t *hash_table, ngx_hash_table_key key)
 {

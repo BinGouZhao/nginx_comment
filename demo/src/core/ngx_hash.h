@@ -9,7 +9,7 @@
 #define ngx_hash_table_null     ((ngx_hash_table_value) 0)
 
 //typedef ngx_websocket_connection_t  ngx_hash_table_value;
-typedef ngx_uint_t                  ngx_hash_table_value;
+typedef void *						ngx_hash_table_value;
 typedef ngx_uint_t                  ngx_hash_table_key;
 
 typedef ngx_uint_t (*ngx_hash_table_hash_func_pt) (ngx_hash_table_key value);

@@ -18,6 +18,7 @@ typedef enum {
 } ngx_ws_state_e;
 
 typedef struct ngx_websocket_frame_s ngx_websocket_frame_t;
+typedef struct ngx_websocket_connection_s ngx_websocket_connection_t;
 
 struct ngx_websocket_frame_s {
     void            *data;
@@ -60,5 +61,6 @@ struct ngx_websocket_channel_s {
 ngx_int_t ngx_websocket_init();
 void ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id);
 ngx_uint_t ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish);
+void ngx_websocket_process_messages(ngx_cycle_t *cycle);
 
 #endif

@@ -2,7 +2,7 @@
 #define _NGINX_H_INCLUDED_
 
 #ifndef NGX_PREFIX
-#define NGX_PREFIX  "/home/tom/demo/objs/"
+#define NGX_PREFIX  "/home/zhaohongbin/demo/objs/"
 #endif
 
 #ifndef NGX_ERROR_LOG_PATH
