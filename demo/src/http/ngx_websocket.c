@@ -263,7 +263,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
 }
 
 ngx_uint_t
-ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish) 
+ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish, ngx_uint_t length) 
 {
     int             pos;
     u_char          *p;
@@ -273,7 +273,7 @@ ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t
 
     pos = 0;
     mask = 0;
-    n = strlen((char *)message);
+    n = (size_t) length;
 
     frame_header[pos++] = WEBSOCKET_FRAME_SET_FIN(finish) | WEBSOCKET_FRAME_SET_OPCODE(opcode);
 

@@ -32,6 +32,7 @@ CORE_DEPS = src/core/nginx.h \
 	src/os/unix/ngx_process_cycle.h \
 	src/os/unix/ngx_channel.h \
 	src/os/unix/ngx_errno.h \
+	src/os/unix/ngx_redis_message.h \
 	src/event/ngx_event.h \
 	src/event/ngx_event_timer.h \
 	src/core/ngx_hash.h \
@@ -88,6 +89,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_list.o \
 	objs/src/core/ngx_hash.o \
 	objs/src/core/ngx_sha1.o \
+	objs/src/os/unix/ngx_redis_message.o \
 	objs/src/event/ngx_event_accept.o 
 	
 
@@ -127,6 +129,7 @@ objs/nginx:	objs/src/core/nginx.o \
 	objs/src/core/ngx_list.o \
 	objs/src/core/ngx_hash.o \
 	objs/src/core/ngx_sha1.o \
+	objs/src/os/unix/ngx_redis_message.o \
 	-ldl -lpthread -lcrypt -lpcre -lz -lrt \
 	-Wl,-E
 	
@@ -317,6 +320,12 @@ objs/src/os/unix/ngx_recv.o:	$(CORE_DEPS) \
 		-o objs/src/os/unix/ngx_recv.o \
 		src/os/unix/ngx_recv.c
 
+objs/src/os/unix/ngx_redis_message.o:	$(CORE_DEPS) \
+	src/os/unix/ngx_redis_message.c
+	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) \
+		-o objs/src/os/unix/ngx_redis_message.o \
+		src/os/unix/ngx_redis_message.c
+
 objs/src/http/ngx_http_parse.o:	$(CORE_DEPS) $(HTTP_DEPS) \
 	src/http/ngx_http_parse.c
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
@@ -328,9 +337,6 @@ objs/src/http/ngx_websocket.o:	$(CORE_DEPS) $(HTTP_DEPS) \
 	$(CC) -c -g -O0 $(CFLAGS) $(CORE_INCS) $(HTTP_INCS) \
 		-o objs/src/http/ngx_websocket.o \
 		src/http/ngx_websocket.c
-
-
-
 
 objs/src/core/ngx_list.o:	$(CORE_DEPS) \
 	src/core/ngx_list.c

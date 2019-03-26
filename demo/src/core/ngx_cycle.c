@@ -85,8 +85,8 @@ ngx_init_cycle(ngx_cycle_t *old_cycle)
     ngx_memzero(&address, sizeof(address));
     address.sin_family =AF_INET;
     //inet_pton(AF_INET, "127.0.0.1", &address.sin_addr);
-    inet_pton(AF_INET, "10.0.0.206", &address.sin_addr);
-    //inet_pton(AF_INET, "192.168.40.136", &address.sin_addr);
+    //inet_pton(AF_INET, "10.0.0.206", &address.sin_addr);
+    inet_pton(AF_INET, "192.168.40.136", &address.sin_addr);
     address.sin_port = htons(40199);
 
     ngx_listening_t *ls = ngx_create_listening(cycle, (struct sockaddr *)&address, sizeof(address));

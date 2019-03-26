@@ -3,6 +3,7 @@
 #include <ngx_event.h>
 #include <ngx_channel.h>
 #include <ngx_websocket.h>
+#include <ngx_redis_message.h>
 
 static void ngx_master_process_exit(ngx_cycle_t *cycle);
 static void ngx_start_worker_processes(ngx_cycle_t *cycle, ngx_int_t n,
@@ -232,19 +233,19 @@ ngx_websocket_message_process_cycle(ngx_cycle_t *cycle, void *data)
 static void
 ngx_process_websocket_messages(ngx_cycle_t *cycle)
 {
-	ssize_t					n;
-	ngx_socket_t			fd;
-	ngx_redis_connection_t	*rc;
+	ssize_t					    n;
+    ngx_err_t                   err;
+    ngx_int_t                   ret;
+    ngx_uint_t                  length;
+	ngx_socket_t			    fd;
+	ngx_redis_connection_t	    *rc;
+    ngx_websocket_message_t     *m;
 
 	rc = cycle->redis;
 
 	n = ngx_redis_read_message(rc);
 
-	if (n > 0) {
-			
-	}
-	
-	if (n == 0) {
+    if (n == 0) {
 		ngx_log_error(NGX_LOG_ALERT, rc->log, ngx_errno,
 					  "redis server has gone away.");
 	}
@@ -252,14 +253,14 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
 	if (n == 0 || n == NGX_ERROR) {
 
 		fd = rc->fd;
-		rc->fd = (ngx_close_socket) -1;
+		rc->fd = (ngx_socket_t) -1;
 
 		if (fd != -1) {
 			if (ngx_close_socket(fd) == -1) {
 
 				err = ngx_socket_errno;
 
-				ngx_log_error(NGX_LOG_CRIT, c->log, err, ngx_close_socket_n " %d failed", fd);
+				ngx_log_error(NGX_LOG_CRIT, rc->log, err, ngx_close_socket_n " %d failed", fd);
 			}
 		}
 
@@ -272,26 +273,49 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
 		}
 	}
 
-    static char                 buffer[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH + 2];
-    ngx_websocket_message_t     *m;
+    for ( ;; ) {
+        if (ret == NGX_AGAIN) {
+            if (rc->buffer->pos == rc->buffer->last) {
+                break;
+            }
+        }
 
-    m = &ngx_messages[ngx_message_index];
+        ret = ngx_process_parse_message(rc, rc->buffer);
 
-    m->message_id = ngx_message_id;
-    m->channel_id = 1;
+        if (ret == NGX_OK) {
+            if (rc->error) {
+                ngx_log_error(NGX_LOG_ALERT, rc->log, ngx_errno,
+                        "redis server has a error: %s", rc->error_start);
+                exit(2);
+            }
 
-    sprintf(buffer, "hello: %d", (int) ngx_message_id);
-    m->message_length = ngx_websocket_frame_encode(m->message, (u_char *)buffer, NGX_WS_OPCODE_TEXT, 1);
+            length = rc->message_end - rc->message_start;
 
-    ngx_message_id++;
-    ngx_message_index++;
+            m = &ngx_messages[ngx_message_index];
+            m->message_id = ngx_message_id;
+            m->channel_id = 1;
 
-    if (ngx_message_index == NGX_WEBSOCKET_MESSAGE_N) {
-        ngx_message_index = 0;
+            m->message_length = ngx_websocket_frame_encode(m->message, rc->message_start, NGX_WS_OPCODE_TEXT, 1, length);
+
+            ngx_message_id++;
+            ngx_message_index++;
+
+            if (ngx_message_index == NGX_WEBSOCKET_MESSAGE_N) {
+                ngx_message_index = 0;
+            }
+
+            continue;
+        }
+
+        if (ret == NGX_AGAIN) {
+            continue;
+        }
+
+        ngx_log_error(NGX_LOG_ALERT, rc->log, ngx_errno,
+                      "redis server has a error: %d", ret);
+        exit(2);
     }
-
     ngx_websocket_new_message(cycle);
-    sleep(10);
 
     return;
 }

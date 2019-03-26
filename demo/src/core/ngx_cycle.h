@@ -3,6 +3,7 @@
 
 #include <ngx_config.h>
 #include <ngx_core.h>
+#include <ngx_redis_message.h>
 
 #ifndef NGX_CYCLE_POOL_SIZE
 #define NGX_CYCLE_POOL_SIZE     NGX_DEFAULT_POOL_SIZE

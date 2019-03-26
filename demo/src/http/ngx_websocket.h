@@ -62,7 +62,7 @@ struct ngx_websocket_channel_s {
 
 ngx_int_t ngx_websocket_init();
 void ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id);
-ngx_uint_t ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish);
+ngx_uint_t ngx_websocket_frame_encode(u_char *buffer, u_char *message, char opcode, uint8_t finish, ngx_uint_t length);
 void ngx_websocket_process_messages(ngx_cycle_t *cycle);
 
 #endif

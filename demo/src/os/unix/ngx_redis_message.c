@@ -47,7 +47,7 @@ ngx_redis_init_connection(ngx_cycle_t *cycle)
 	address.sin_addr.s_addr = inet_addr(ngx_redis_ip);
 	address.sin_port = htons(ngx_redis_port);
 
-	if (connect(s, struct sockaddr *)&address, sizeof(address) == -1) {
+	if (connect(s, (struct sockaddr *)&address, sizeof(address)) == -1) {
 		ngx_log_error(NGX_LOG_ALERT, cycle->log, ngx_errno,
 					  "run connect() failed(in ngx_redis_init_connection).");
 
@@ -93,7 +93,6 @@ ngx_redis_subscribe(ngx_redis_connection_t *rc)
 ssize_t
 ngx_redis_read_message(ngx_redis_connection_t *rc) {
 	ssize_t		n;
-	ngx_err_t	err;
 
 	n = recv(rc->fd, rc->buffer->last, rc->buffer->end - rc->buffer->last, 0);
 
@@ -110,18 +109,15 @@ ngx_redis_read_message(ngx_redis_connection_t *rc) {
 		return n;
 	}
 
-	err = ngx_socket_errno;
-	n = ngx_connection_error(c, err, "recv() failed");
+    ngx_log_error(NGX_LOG_ALERT, rc->log, ngx_errno,
+                  "run recv() failed(in ngx_redis_read_message).");
 
-	// NGX_ERROR
-	return n;
+    return NGX_ERROR;
 }
 
 ngx_int_t
 ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b) 
 {
-	int		i, n;
-	int		message_length;
 	u_char	ch, *p;
 	
 	enum {
@@ -129,15 +125,14 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 		sw_subscribe,
 		sw_subscribe_channel_length,
 		sw_subscribe_channel_name,
-		sw_subscribe_channel_clinet_num,
+		sw_subscribe_channel_clinet,
 		sw_message,
 		sw_message_length,
 		sw_message_value,
+        //sw_message_too_long,
 		sw_error,
-		sw_almost_done,
 	} state;		
 
-	message_length = 0;
 	state = rc->state;
 
 	for (p = rc->buffer->pos; p < rc->buffer->last; p++) {
@@ -169,47 +164,53 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 				}
 
 				if (ch == '\n' && rc->after_cr) {
+                    rc->after_cr = 0;
 					rc->error_end = p;
+                    *(rc->error_end) = '\0';
 					goto done;
 				}
 
-
-
+                rc->after_cr = 0;
+                break;
 
 			case sw_subscribe:
 				
-				if (ngx_strncmp(p, "\r\n$9\r\nsubscribe\r\n$", strlen("\r\n$9\r\nsubscribe\r\n$"))
+				if (ngx_strncmp(p, "3\r\n$9\r\nsubscribe\r\n$", strlen("3\r\n$9\r\nsubscribe\r\n$"))
 					!= 0)
 				{
 					return NGX_REDIS_PARSE_INVALID_SUBSCRIBE;
 				}
 
-				i = 0;
-				p = p + strlen("\r\n$9\r\nsubscribe\r\n$") - 1;
+                rc->number_index = 0;
+				p = p + strlen("3\r\n$9\r\nsubscribe\r\n$") - 1;
 				state = sw_subscribe_channel_length;
 				break;
 
 			case sw_subscribe_channel_length:
 				if (ch == '\r') {
+                    rc->after_cr = 1;
 					continue;
 				}	
 
-				if (ch == '\n') {
-					number[i] = '\0';
-					rc->channel_name_length = atoi(number);
+				if (ch == '\n' && rc->after_cr) {
+                    rc->after_cr = 0;
+                    rc->number[rc->number_index] = '\0';
+					rc->number_length = atoi(rc->number);
 
-					if (rc->channel_name_length <= 0 || rc->channel_name_length > 20) {
+					if (rc->number_length <= 0 || rc->number_length > 20) {
 						return NGX_REDIS_PARSE_INVALID_CHANNEL_NAME;
 					}
 
-					n = 0;
+                    rc->channel_name_length = rc->number_length;
+                    rc->channel_name_index = 0;
 					state = sw_subscribe_channel_name;
 					break;
 				}
 
+                rc->after_cr = 0;
 				if (ch >= '0' && ch <= '9') {
-					number[i] = ch;
-					i++;
+                    rc->number[rc->number_index] = ch;
+                    rc->number_index++;
 					break;
 				}
 
@@ -218,55 +219,58 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 			case sw_subscribe_channel_name:
 
 				if (ch == '\r') {
+                    rc->after_cr = 1;
 					continue;
 				}
 
-				if (ch == '\n') {
-					rc->channel_name[n] = '\0';
-					state = sw_subscribe_channel_clinet_num;
-					i = 0;
+				if (ch == '\n' && rc->after_cr) {
+                    rc->after_cr = 0;
+					rc->channel_name[rc->channel_name_index] = '\0';
+
+                    if ((size_t) rc->channel_name_length != strlen(rc->channel_name)) {
+                        return NGX_REDIS_PARSE_INVALID_CHANNEL_NAME;
+                    }
 
 					sprintf(rc->channel_message_prefix, "*3\r\n$7\r\nmessage\r\n$%d\r\n%s\r\n$",
 							rc->channel_name_length, rc->channel_name);
 					rc->channel_message_prefix_n = strlen(rc->channel_message_prefix);
 
+					state = sw_subscribe_channel_clinet;
 					break;
 				}
 
-				if (n < rc->channel_name_length) {
-					rc->channel_name[n] = ch;
-					n++;
-				} else {
+                rc->after_cr = 0;
+				if (rc->channel_name_index >= (ngx_uint_t) rc->channel_name_length) {
 					return NGX_REDIS_PARSE_INVALID_CHANNEL_NAME;
-				}
+                }
 
-				break;
+                rc->channel_name[rc->channel_name_index] = ch;
+                rc->channel_name_index++;
+                break;
 
 			case sw_subscribe_channel_clinet:
 			
-				if (ch == ';') {
+				if (ch == ':') {
 					continue;
 				}
 
 				if (ch == '\r') {
+                    rc->after_cr = 1;
 					continue;
 				}
 
-				if (ch == '\n') {
+				if (ch == '\n' && rc->after_cr) {
 					// pass
 					// redis 返回的已有多少个client订阅
+                    rc->after_cr = 0;
 					state = sw_message;
 					break;
 				}
 
+                rc->after_cr = 0;
 				if (ch >= '0' && ch <= '9') {
-					number[i] = ch;
-					i++;
-
-					if (i > 20) {
-						return NGX_REDIS_PARSE_INVALID_LENGTH;
-					}
-					break;
+                    // pass
+                    break;
 				}
 
 				return NGX_REDIS_PARSE_INVALID_MESSAGE;
@@ -279,8 +283,9 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 					return NGX_REDIS_PARSE_INVALID_MESSAGE;
 				}	
 
+                p = p + rc->channel_message_prefix_n - 1;
+                rc->number_index = 0;
 				state = sw_message_length;
-				i = 0;
 				break;
 
 			case sw_message_length:
@@ -292,24 +297,21 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 
 				if (ch == '\n' && rc->after_cr) {
 					rc->number[rc->number_index] = '\0';
-					message_length = atoi(rc->number);
+					rc->message_length = atoi(rc->number);
 
-					if (message_length > 256) {
-						state = sw_message_too_long;
+					if (rc->message_length > 256) {
+						//state = sw_message_too_long;
+                        //
+                        return NGX_REDIS_PARSE_INVALID_MESSAGE;
 						break;
 					}
 
-					if (message_length <= 0) {
-						state = sw_message;
-						goto done;
-					}
-
 					rc->message_start = p + 1;
-					rc->message_length = message_length;
-					state = sw_subscribe_message_value;
+					state = sw_message_value;
 					break;
 				}
 
+                rc->after_cr = 0;
 				if (ch >= '0' && ch <= '9') {
 					rc->number[rc->number_index] = ch;
 					rc->number_index++;
@@ -326,25 +328,29 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 				}
 
 				if (ch == '\r') {
+                    rc->after_cr = 1;
 					continue;
 				}
 
-				if (ch == '\n') {
+				if (ch == '\n' && rc->after_cr) {
+                    rc->after_cr = 0;
+                    rc->message_end = p - 1;
 					state = sw_message;
 					goto done;
 				}
 
-				rc->message_end = p;
-
+                rc->after_cr = 0;
 				break;
 		}
 	}
 	
+    b->pos = p;
 	rc->state = state;
 	return NGX_AGAIN;
 
 done:
 	
+    b->pos = p + 1;
 	rc->state = sw_message;
 	return NGX_OK;
 }
