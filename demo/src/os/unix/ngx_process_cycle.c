@@ -232,6 +232,46 @@ ngx_websocket_message_process_cycle(ngx_cycle_t *cycle, void *data)
 static void
 ngx_process_websocket_messages(ngx_cycle_t *cycle)
 {
+	ssize_t					n;
+	ngx_socket_t			fd;
+	ngx_redis_connection_t	*rc;
+
+	rc = cycle->redis;
+
+	n = ngx_redis_read_message(rc);
+
+	if (n > 0) {
+			
+	}
+	
+	if (n == 0) {
+		ngx_log_error(NGX_LOG_ALERT, rc->log, ngx_errno,
+					  "redis server has gone away.");
+	}
+
+	if (n == 0 || n == NGX_ERROR) {
+
+		fd = rc->fd;
+		rc->fd = (ngx_close_socket) -1;
+
+		if (fd != -1) {
+			if (ngx_close_socket(fd) == -1) {
+
+				err = ngx_socket_errno;
+
+				ngx_log_error(NGX_LOG_CRIT, c->log, err, ngx_close_socket_n " %d failed", fd);
+			}
+		}
+
+		if (ngx_redis_init_connection(cycle) == NGX_ERROR) {
+			exit(2);
+		}
+
+		if (ngx_redis_subscribe(cycle->redis) == NGX_ERROR) {
+			exit(2);
+		}
+	}
+
     static char                 buffer[NGX_WEBSOCKET_MAX_MESSAGE_LENGTH + 2];
     ngx_websocket_message_t     *m;
 
@@ -297,6 +337,14 @@ ngx_websocket_message_process_init(ngx_cycle_t *cycle)
 
     tp = ngx_timeofday();
     srandom(((unsigned) ngx_pid << 16) ^ tp->sec ^ tp->msec);
+
+	if (ngx_redis_init_connection(cycle) == NGX_ERROR) {
+		exit(2);
+	}
+
+	if (ngx_redis_subscribe(cycle->redis) == NGX_ERROR) {
+		exit(2);
+	}
 }
 
 static void

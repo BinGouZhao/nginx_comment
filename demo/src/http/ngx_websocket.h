@@ -43,6 +43,8 @@ struct ngx_websocket_connection_s {
 
     ngx_uint_t              channel_id;
     ngx_uint_t              message_id;
+
+	unsigned				in_queue:1;
 };
 
 struct ngx_websocket_channel_s {

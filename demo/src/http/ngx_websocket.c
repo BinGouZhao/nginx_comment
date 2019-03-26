@@ -91,6 +91,7 @@ ngx_websocket_init_connection(ngx_connection_t *c, ngx_uint_t channel_id)
 
     ngx_queue_insert_tail(channel_queue, &wc->queue);
 
+	wc->in_queue = 1;
     c->read->handler = ngx_websocket_wait_frame_handler;
     c->write->handler = ngx_websocket_send_message_handler;
 
@@ -184,6 +185,7 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
 	size_t              		size;
 	ssize_t             		n;
     ngx_connection_t    		*c;
+	ngx_queue_t					*channel_queue;
     ngx_websocket_connection_t 	*wc;
 
 
@@ -245,6 +247,17 @@ ngx_websocket_send_message_handler(ngx_event_t *wev)
             return;
         }
     }
+
+	channel_queue = ngx_hash_table_lookup(ngx_websocket_hash_table, wc->channel_id);
+	if (channel_queue == ngx_hash_table_null) {
+		ngx_websocket_close_connection(wc);
+        ngx_log_error(NGX_LOG_ALERT, ngx_cycle->log, ngx_errno, "hash table find channle_queue failed, channel_id: %d",
+				   	  (int) wc->channel_id);
+		return;
+	}
+
+    ngx_queue_insert_tail(channel_queue, &wc->queue);
+	wc->in_queue = 1;
 
     return;
 }
@@ -389,7 +402,9 @@ ngx_websocket_close_connection(ngx_websocket_connection_t *wc)
 
     c = wc->data;
     
-    ngx_queue_remove(&wc->queue);
+	if (wc->in_queue) {
+		ngx_queue_remove(&wc->queue);
+	}
 
     ngx_destroy_pool(wc->pool);
     ngx_http_close_connection(c);
@@ -435,6 +450,8 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
             return;
         }
 
+		ngx_queue_remove(&wc->queue);
+		wc->in_queue = 0;
         return;
     }
 
@@ -460,6 +477,9 @@ ngx_websocket_message_handler(ngx_websocket_connection_t *wc)
             ngx_websocket_close_connection(wc);
             return;
         }
+
+		ngx_queue_remove(&wc->queue);
+		wc->in_queue = 0;
     }
 
     return;

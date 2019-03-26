@@ -37,6 +37,8 @@ struct ngx_cycle_s {
     ngx_uint_t              reusable_connections_n;
 
     ngx_str_t               hostname;
+
+	ngx_redis_connection_t	*redis;
 };
 
 struct ngx_websocket_message_s {
