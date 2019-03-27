@@ -387,6 +387,7 @@ ngx_http_process_request_headers(ngx_event_t *rev)
 
 				// todo
                 ngx_http_finalize_request(r, NGX_HTTP_INTERNAL_SERVER_ERROR);
+				return;
 			}
 
 			n = ngx_http_read_request_header(r);

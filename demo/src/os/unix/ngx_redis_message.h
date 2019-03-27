@@ -23,6 +23,7 @@ struct ngx_redis_connection_s {
 
 	u_char				*message_start;
 	u_char				*message_end;
+	u_char				*parse_start;
 
 	u_char				*error_start;
 	u_char				*error_end;
@@ -46,7 +47,8 @@ struct ngx_redis_connection_s {
 
 	unsigned			error:1;
 	unsigned			close:1;
-	unsigned			after_cr;
+	unsigned			after_cr:1;
+	unsigned			parse_done:1;
 };
 
 ngx_int_t ngx_redis_init_connection(ngx_cycle_t *cycle);

@@ -138,6 +138,7 @@ ngx_process_parse_message(ngx_redis_connection_t *rc, ngx_buf_t *b)
 	for (p = rc->buffer->pos; p < rc->buffer->last; p++) {
 
 		ch = *p;
+		rc->parse_done = 0;
 
 		switch (state) {
 			case sw_start:

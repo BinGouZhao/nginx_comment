@@ -273,12 +273,28 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
 		}
 	}
 
+	ret = 0;
+
     for ( ;; ) {
         if (ret == NGX_AGAIN) {
             if (rc->buffer->pos == rc->buffer->last) {
-                break;
-            }
+				if (rc->parse_done) {
+					// 数据区重置
+					rc->buffer->pos = rc->buffer->start;
+					rc->buffer->last = rc->buffer->start;
+				}
+			}
+
+			break;
         }
+
+		if (rc->parse_done) {
+			if (rc->buffer->end - rc->buffer->pos < 
+					NGX_WEBSOCKET_MAX_MESSAGE_LENGTH - (ngx_int_t) rc->channel_message_prefix_n) 
+			{
+				ngx_memcpy(rc->parse_start, rc->buffer->start, rc->buffer->last - rc->parse_start); 
+			}
+		}
 
         ret = ngx_process_parse_message(rc, rc->buffer);
 
@@ -304,6 +320,10 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
                 ngx_message_index = 0;
             }
 
+			rc->parse_done = 1;
+			rc->parse_start = rc->buffer->pos;
+			ngx_websocket_new_message(cycle);
+
             continue;
         }
 
@@ -315,7 +335,6 @@ ngx_process_websocket_messages(ngx_cycle_t *cycle)
                       "redis server has a error: %d", ret);
         exit(2);
     }
-    ngx_websocket_new_message(cycle);
 
     return;
 }
